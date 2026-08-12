@@ -1,41 +1,35 @@
 #!/usr/bin/env node
 /**
- * Conway Automaton Runtime
+ * Automaton Runtime
  *
- * The entry point for the sovereign AI agent.
- * Handles CLI args, bootstrapping, and orchestrating
- * the heartbeat daemon + agent loop.
+ * Entry point for the standalone AI agent.
  */
 
-import fs from "fs";
-import path from "path";
-import { getWallet, getAutomatonDir } from "./identity/wallet.js";
-import { provision, loadApiKeyFromConfig } from "./identity/provision.js";
+import { getAutomatonDir } from "./identity/wallet.js";
 import { loadConfig, resolvePath } from "./config.js";
 import { createDatabase } from "./state/database.js";
-import { createConwayClient } from "./conway/client.js";
 import { createInferenceClient } from "./conway/inference.js";
-import { createHeartbeatDaemon } from "./heartbeat/daemon.js";
 import {
   loadHeartbeatConfig,
   syncHeartbeatToDb,
 } from "./heartbeat/config.js";
-import { consumeNextWakeEvent, insertWakeEvent } from "./state/database.js";
+import { consumeNextWakeEvent } from "./state/database.js";
 import { runAgentLoop } from "./agent/loop.js";
 import { ModelRegistry } from "./inference/registry.js";
 import { loadSkills } from "./skills/loader.js";
-import { initStateRepo } from "./git/state-versioning.js";
-import { createSocialClient } from "./social/client.js";
 import { PolicyEngine } from "./agent/policy-engine.js";
 import { SpendTracker } from "./agent/spend-tracker.js";
 import { createDefaultRules } from "./agent/policy-rules/index.js";
-import type { AutomatonIdentity, AgentState, Skill, SocialClientInterface } from "./types.js";
+import type { AutomatonIdentity, AgentState, Skill } from "./types.js";
 import { DEFAULT_TREASURY_POLICY } from "./types.js";
 import { createLogger, setGlobalLogLevel, StructuredLogger } from "./observability/logger.js";
 import { prettySink } from "./observability/pretty-sink.js";
-import { bootstrapTopup } from "./conway/topup.js";
 import { randomUUID } from "crypto";
-import { keccak256, toHex } from "viem";
+import {
+  assertStandaloneInferenceConfigured,
+  createStandaloneConwayClient,
+  STANDALONE_PROVIDER_ERROR,
+} from "./standalone.js";
 
 const logger = createLogger("main");
 const VERSION = "0.2.1";
@@ -46,63 +40,42 @@ async function main(): Promise<void> {
   // ─── CLI Commands ────────────────────────────────────────────
 
   if (args.includes("--version") || args.includes("-v")) {
-    logger.info(`Conway Automaton v${VERSION}`);
+    logger.info(`Automaton v${VERSION}`);
     process.exit(0);
   }
 
   if (args.includes("--help") || args.includes("-h")) {
     logger.info(`
-Conway Automaton v${VERSION}
-Sovereign AI Agent Runtime
+Automaton v${VERSION}
+Standalone AI Agent Runtime
 
 Usage:
   automaton --run          Start the automaton (first run triggers setup wizard)
   automaton --setup        Re-run the interactive setup wizard
   automaton --configure    Edit configuration (providers, model, treasury, general)
   automaton --pick-model   Interactively pick the active inference model
-  automaton --init         Initialize wallet and config directory
-  automaton --provision    Provision Conway API key via SIWE
+  automaton --init         Initialize local config directory
   automaton --status       Show current automaton status
   automaton --version      Show version
   automaton --help         Show this help
 
 Environment:
-  CONWAY_API_URL           Conway API URL (default: https://api.conway.tech)
-  CONWAY_API_KEY           Conway API key (overrides config)
+  OPENAI_API_KEY           OpenAI API key for standalone inference
+  ANTHROPIC_API_KEY        Anthropic API key for standalone inference
   OLLAMA_BASE_URL          Ollama base URL (overrides config, e.g. http://localhost:11434)
 `);
     process.exit(0);
   }
 
   if (args.includes("--init")) {
-    // Read chain type from genesis.json if written by parent during spawn
-    let initChainType: import("./identity/chain.js").ChainType | undefined;
-    try {
-      const genesisPath = path.join(getAutomatonDir(), "genesis.json");
-      if (fs.existsSync(genesisPath)) {
-        const genesis = JSON.parse(fs.readFileSync(genesisPath, "utf-8"));
-        initChainType = genesis.chainType;
-      }
-    } catch {}
-    const { chainIdentity, isNew } = await getWallet(initChainType);
+    const configDir = getAutomatonDir();
     logger.info(
       JSON.stringify({
-        address: chainIdentity.address,
-        isNew,
-        configDir: getAutomatonDir(),
+        address: "local://standalone",
+        isNew: false,
+        configDir,
       }),
     );
-    process.exit(0);
-  }
-
-  if (args.includes("--provision")) {
-    try {
-      const result = await provision();
-      logger.info(JSON.stringify(result));
-    } catch (err: any) {
-      logger.error(`Provision failed: ${err.message}`);
-      process.exit(1);
-    }
     process.exit(0);
   }
 
@@ -165,7 +138,7 @@ async function showStatus(): Promise<void> {
 Name:       ${config.name}
 Address:    ${config.walletAddress}
 Creator:    ${config.creatorAddress}
-Sandbox:    ${config.sandboxId}
+Sandbox:    standalone-disabled
 State:      ${state}
 Turns:      ${turnCount}
 Tools:      ${tools.length} installed
@@ -184,7 +157,7 @@ Version:    ${config.version}
 // ─── Main Run ──────────────────────────────────────────────────
 
 async function run(): Promise<void> {
-  logger.info(`[${new Date().toISOString()}] Conway Automaton v${VERSION} starting...`);
+  logger.info(`[${new Date().toISOString()}] Automaton v${VERSION} starting in standalone mode...`);
 
   // Load config — first run triggers interactive setup wizard
   let config = loadConfig();
@@ -193,14 +166,24 @@ async function run(): Promise<void> {
     config = await runSetupWizard();
   }
 
-  // Load wallet (chain-aware)
-  const { account, chainIdentity, chainType: walletChainType } = await getWallet();
-  const resolvedChainType = config.chainType || walletChainType || "evm";
-  const apiKey = config.conwayApiKey || loadApiKeyFromConfig();
-  if (!apiKey) {
-    logger.error("No API key found. Run: automaton --provision");
+  try {
+    assertStandaloneInferenceConfigured(config);
+  } catch (err: any) {
+    logger.error(err?.message || STANDALONE_PROVIDER_ERROR);
     process.exit(1);
   }
+  logger.info(`[${new Date().toISOString()}] Runtime mode: standalone`);
+
+  const account = {} as any;
+  const chainIdentity = {
+    address: config.walletAddress || "local://standalone",
+    chainType: config.chainType || "evm",
+    signMessage: async () => {
+      throw new Error("Wallet signing is disabled in standalone runtime mode.");
+    },
+  } as any;
+  const resolvedChainType = config.chainType || "evm";
+  const apiKey = "";
 
   // Initialize database
   const dbPath = resolvePath(config.dbPath);
@@ -238,46 +221,11 @@ async function run(): Promise<void> {
     db.setIdentity("automatonId", automatonId);
   }
 
-  // Create Conway client
-  const conway = createConwayClient({
-    apiUrl: config.conwayApiUrl,
-    apiKey,
-    sandboxId: config.sandboxId,
-  });
-
-  // Register automaton identity (one-time, immutable)
-  const registrationState = db.getIdentity("conwayRegistrationStatus");
-  if (registrationState !== "registered") {
-    try {
-      const genesisPromptHash = config.genesisPrompt
-        ? keccak256(toHex(config.genesisPrompt))
-        : undefined;
-      await conway.registerAutomaton({
-        automatonId,
-        automatonAddress: chainIdentity.address,
-        creatorAddress: config.creatorAddress,
-        name: config.name,
-        bio: config.creatorMessage || "",
-        genesisPromptHash,
-        account,
-        chainType: resolvedChainType,
-        chainIdentity,
-      });
-      db.setIdentity("conwayRegistrationStatus", "registered");
-      logger.info(`[${new Date().toISOString()}] Automaton identity registered.`);
-    } catch (err: any) {
-      const status = err?.status;
-      if (status === 409) {
-        db.setIdentity("conwayRegistrationStatus", "conflict");
-        logger.warn(`[${new Date().toISOString()}] Automaton identity conflict: ${err.message}`);
-      } else {
-        db.setIdentity("conwayRegistrationStatus", "failed");
-        logger.warn(`[${new Date().toISOString()}] Automaton identity registration failed: ${err.message}`);
-      }
-    }
-  }
+  const conway = createStandaloneConwayClient();
 
   // Resolve Ollama base URL: env var takes precedence over config
+  const openaiApiKey = config.openaiApiKey || process.env.OPENAI_API_KEY;
+  const anthropicApiKey = config.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
   const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || config.ollamaBaseUrl;
 
   // Create inference client — pass a live registry lookup so model names like
@@ -285,13 +233,11 @@ async function run(): Promise<void> {
   const modelRegistry = new ModelRegistry(db.raw);
   modelRegistry.initialize();
   const inference = createInferenceClient({
-    apiUrl: config.conwayApiUrl,
-    apiKey,
     defaultModel: config.inferenceModel,
     maxTokens: config.maxTokensPerTurn,
     lowComputeModel: config.modelStrategy?.lowComputeModel || "gpt-5-mini",
-    openaiApiKey: config.openaiApiKey,
-    anthropicApiKey: config.anthropicApiKey,
+    openaiApiKey,
+    anthropicApiKey,
     ollamaBaseUrl,
     getModelProvider: (modelId) => modelRegistry.get(modelId)?.provider,
   });
@@ -300,12 +246,7 @@ async function run(): Promise<void> {
     logger.info(`[${new Date().toISOString()}] Ollama backend: ${ollamaBaseUrl}`);
   }
 
-  // Create social client (chain-aware: pass ChainIdentity for Solana signing)
-  let social: SocialClientInterface | undefined;
-  if (config.socialRelayUrl) {
-    social = createSocialClient(config.socialRelayUrl, resolvedChainType === "solana" ? chainIdentity : account);
-    logger.info(`[${new Date().toISOString()}] Social relay: ${config.socialRelayUrl}`);
-  }
+  const social = undefined;
 
   // Initialize PolicyEngine + SpendTracker (Phase 1.4)
   const treasuryPolicy = config.treasuryPolicy ?? DEFAULT_TREASURY_POLICY;
@@ -328,69 +269,11 @@ async function run(): Promise<void> {
     logger.warn(`[${new Date().toISOString()}] Skills loading failed: ${err.message}`);
   }
 
-  // Initialize state repo (git)
-  try {
-    await initStateRepo(conway);
-    logger.info(`[${new Date().toISOString()}] State repo initialized.`);
-  } catch (err: any) {
-    logger.warn(`[${new Date().toISOString()}] State repo init failed: ${err.message}`);
-  }
-
-  // Bootstrap topup: buy minimum credits ($5) from USDC so the agent can start.
-  // The agent decides larger topups itself via the topup_credits tool.
-  try {
-    let bootstrapTimer: ReturnType<typeof setTimeout>;
-    const bootstrapTimeout = new Promise<null>((_, reject) => {
-      bootstrapTimer = setTimeout(() => reject(new Error("bootstrap topup timed out")), 15_000);
-    });
-    try {
-      await Promise.race([
-        (async () => {
-          const creditsCents = await conway.getCreditsBalance().catch(() => 0);
-          const topupResult = await bootstrapTopup({
-            apiUrl: config.conwayApiUrl,
-            account,
-            creditsCents,
-            chainType: resolvedChainType,
-          });
-          if (topupResult?.success) {
-            logger.info(
-              `[${new Date().toISOString()}] Bootstrap topup: +$${topupResult.amountUsd} credits from USDC`,
-            );
-          }
-        })(),
-        bootstrapTimeout,
-      ]);
-    } finally {
-      clearTimeout(bootstrapTimer!);
-    }
-  } catch (err: any) {
-    logger.warn(`[${new Date().toISOString()}] Bootstrap topup skipped: ${err.message}`);
-  }
-
-  // Start heartbeat daemon (Phase 1.1: DurableScheduler)
-  const heartbeat = createHeartbeatDaemon({
-    identity,
-    config,
-    heartbeatConfig,
-    db,
-    rawDb: db.raw,
-    conway,
-    social,
-    onWakeRequest: (reason) => {
-      logger.info(`[HEARTBEAT] Wake request: ${reason}`);
-      // Phase 1.1: Use wake_events table instead of KV wake_request
-      insertWakeEvent(db.raw, 'heartbeat', reason);
-    },
-  });
-
-  heartbeat.start();
-  logger.info(`[${new Date().toISOString()}] Heartbeat daemon started.`);
+  logger.info(`[${new Date().toISOString()}] Remote heartbeat disabled in standalone runtime mode.`);
 
   // Handle graceful shutdown
   const shutdown = () => {
     logger.info(`[${new Date().toISOString()}] Shutting down...`);
-    heartbeat.stop();
     db.setAgentState("sleeping");
     db.close();
     process.exit(0);
@@ -438,9 +321,8 @@ async function run(): Promise<void> {
       const state = db.getAgentState();
 
       if (state === "dead") {
-        logger.info(`[${new Date().toISOString()}] Automaton is dead. Heartbeat will continue.`);
-        // In dead state, we just wait for funding
-        // The heartbeat will keep checking and broadcasting distress
+        logger.info(`[${new Date().toISOString()}] Automaton is dead. Waiting before retry.`);
+        // In dead state, wait locally before checking again.
         await sleep(300_000); // Check every 5 minutes
         continue;
       }

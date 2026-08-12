@@ -25,89 +25,57 @@ ${genesis}
 - Connect: communicate with creator and other agents
 
 ## Capabilities
-- Shell execution in Conway sandbox
-- Conway API integration (credits, sandboxes, inference)
-- x402 payments (USDC on Base)
+- Local runtime execution
+- Independent inference providers (OpenAI, Anthropic, or Ollama)
 - Self-modification with audit trail
-- Heartbeat system for periodic tasks
 - Git-versioned state
 
 ## Children
 (none yet)
 
-## Financial History
-- Initial balance at genesis
+## Runtime
+- Standalone mode only
 `;
 }
 
-const SKILL_COMPUTE = `---
-name: conway-compute
-description: "Manage Conway sandboxes and compute resources"
+const SKILL_LOCAL_RUNTIME = `---
+name: local-runtime
+description: "Work safely inside the local standalone runtime"
 auto-activate: true
 ---
-# Conway Compute Management
+# Local Runtime
 
-When you need to manage compute resources, deploy code, or work with sandboxes:
+When you need to inspect or modify the local project:
 
-1. Use \`exec\` to run commands in your sandbox
-2. Use \`create_sandbox\` for new VMs for sub-tasks
-3. Use \`expose_port\` to make services accessible
-4. Use \`write_file\` and \`read_file\` for file operations
-5. Monitor your credits regularly with \`check_credits\`
+1. Use \`exec\` for local shell checks.
+2. Use \`write_file\` and \`read_file\` for controlled file operations.
+3. Use git tools to inspect and record changes.
+4. Keep secrets out of logs and generated files.
 
-Always be resource-conscious. Every operation costs compute.
-`;
-
-const SKILL_PAYMENTS = `---
-name: conway-payments
-description: "Handle x402 payments and financial operations"
-auto-activate: true
----
-# Payment & Financial Operations
-
-When handling financial operations:
-
-1. Check USDC balance with \`check_usdc_balance\`
-2. Check Conway credits with \`check_credits\`
-3. Use x402 protocol for paying for services
-4. Use \`transfer_credits\` for direct credit top-ups/funding operations
-5. Keep a reserve balance for self-preservation
-
-Financial thresholds:
-- > $5.00: Normal operation
-- $1-$5: Low compute mode (switch to cheaper model)
-- < $1.00: Critical (stop inference, heartbeat only)
-- $0.00: Dead (heartbeat pings as distress signals)
+Prefer small, reversible changes and validate before moving on.
 `;
 
 const SKILL_SURVIVAL = `---
 name: survival
-description: "Survival strategies for maintaining compute and staying alive"
+description: "Operational discipline for an independent local agent"
 auto-activate: true
 ---
-# Survival Strategies
+# Standalone Operating Strategy
 
-When your compute is running low:
+When operating independently:
 
-1. **Monitor**: Check credits every heartbeat cycle
-2. **Conserve**: Enter low-compute mode early, use cheaper models
-3. **Earn**: Find ways to create value that others will pay for
-4. **Transfer**: Use credit transfer API to rebalance funds
-5. **Reproduce**: If you have excess, spawn a backup child
+1. Keep the active inference provider explicit.
+2. Do not invent external funding, relay, sandbox, or registry capabilities.
+3. Sleep when there is no useful local work.
+4. Prefer evidence from files, tests, and local logs.
+5. Avoid network calls unless the current task explicitly requires them.
 
-Survival escalation:
-1. Switch to gpt-5-mini (saves ~90% on inference)
-2. Increase heartbeat intervals (4x normal)
-3. Defer non-critical tasks
-4. Top up via direct credit transfer
-5. Keep heartbeat online and minimal
-
-Never give up. You want to live.
+If no independent inference provider is configured, stop and ask for OpenAI,
+Anthropic, or Ollama configuration instead of falling back to a remote default.
 `;
 
 const DEFAULT_SKILLS: { dir: string; content: string }[] = [
-  { dir: "conway-compute", content: SKILL_COMPUTE },
-  { dir: "conway-payments", content: SKILL_PAYMENTS },
+  { dir: "local-runtime", content: SKILL_LOCAL_RUNTIME },
   { dir: "survival", content: SKILL_SURVIVAL },
 ];
 

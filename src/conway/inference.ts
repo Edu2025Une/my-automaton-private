@@ -1,8 +1,7 @@
 /**
- * Conway Inference Client
+ * Standalone inference client.
  *
- * Wraps Conway's /v1/chat/completions endpoint (OpenAI-compatible).
- * The automaton pays for its own thinking through Conway credits.
+ * Supports independent OpenAI-compatible, Anthropic, and Ollama providers.
  */
 
 import type {
@@ -15,12 +14,11 @@ import type {
   InferenceToolDefinition,
 } from "../types.js";
 import { ResilientHttpClient } from "./http-client.js";
+import { STANDALONE_PROVIDER_ERROR } from "../standalone.js";
 
 const INFERENCE_TIMEOUT_MS = 60_000;
 
 interface InferenceClientOptions {
-  apiUrl: string;
-  apiKey: string;
   defaultModel: string;
   maxTokens: number;
   lowComputeModel?: string;
@@ -31,7 +29,7 @@ interface InferenceClientOptions {
   getModelProvider?: (modelId: string) => string | undefined;
 }
 
-type InferenceBackend = "conway" | "openai" | "anthropic" | "ollama";
+type InferenceBackend = "openai" | "anthropic" | "ollama";
 
 function isLoopbackHttpUrl(url: string | undefined): boolean {
   if (!url) return false;
@@ -48,7 +46,12 @@ function isLoopbackHttpUrl(url: string | undefined): boolean {
 export function createInferenceClient(
   options: InferenceClientOptions,
 ): InferenceClient {
-  const { apiUrl, apiKey, openaiApiKey, anthropicApiKey, ollamaBaseUrl, getModelProvider } = options;
+  const {
+    openaiApiKey,
+    anthropicApiKey,
+    ollamaBaseUrl,
+    getModelProvider,
+  } = options;
   const httpClient = new ResilientHttpClient({
     baseTimeout: INFERENCE_TIMEOUT_MS,
     retryableStatuses: [429, 500, 502, 503, 504],
@@ -112,12 +115,10 @@ export function createInferenceClient(
 
     const openAiLikeApiUrl =
       backend === "openai" ? "https://api.openai.com" :
-      backend === "ollama" ? (ollamaBaseUrl as string).replace(/\/$/, "") :
-      apiUrl;
+      (ollamaBaseUrl as string).replace(/\/$/, "");
     const openAiLikeApiKey =
       backend === "openai" ? (openaiApiKey as string) :
-      backend === "ollama" ? "ollama" :
-      apiKey;
+      "ollama";
 
     return chatViaOpenAiCompatible({
       model,
@@ -189,15 +190,16 @@ function resolveInferenceBackend(
     if (provider === "ollama" && keys.ollamaBaseUrl) return "ollama";
     if (provider === "anthropic" && keys.anthropicApiKey) return "anthropic";
     if (provider === "openai" && keys.openaiApiKey) return "openai";
-    if (provider === "conway") return "conway";
     // provider unknown or key not configured — fall through to heuristics
   }
 
   // Heuristic fallback (model not in registry yet)
   if (keys.anthropicApiKey && /^claude/i.test(model)) return "anthropic";
   if (keys.openaiApiKey && /^(gpt-[3-9]|gpt-4|gpt-5|o[1-9][-\s.]|o[1-9]$|chatgpt)/i.test(model)) return "openai";
-  return "conway";
-
+  if (keys.ollamaBaseUrl) return "ollama";
+  if (keys.openaiApiKey) return "openai";
+  if (keys.anthropicApiKey) return "anthropic";
+  throw new Error(STANDALONE_PROVIDER_ERROR);
 }
 
 async function chatViaOpenAiCompatible(params: {
@@ -205,7 +207,7 @@ async function chatViaOpenAiCompatible(params: {
   body: Record<string, unknown>;
   apiUrl: string;
   apiKey: string;
-  backend: "conway" | "openai" | "ollama";
+  backend: "openai" | "ollama";
   httpClient: ResilientHttpClient;
 }): Promise<InferenceResponse> {
   const resp = await params.httpClient.request(`${params.apiUrl}/v1/chat/completions`, {
@@ -213,9 +215,7 @@ async function chatViaOpenAiCompatible(params: {
     headers: {
       "Content-Type": "application/json",
       Authorization:
-        params.backend === "openai" || params.backend === "ollama"
-          ? `Bearer ${params.apiKey}`
-          : params.apiKey,
+        `Bearer ${params.apiKey}`,
     },
     body: JSON.stringify(params.body),
     timeout: INFERENCE_TIMEOUT_MS,

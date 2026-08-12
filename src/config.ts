@@ -9,9 +9,9 @@ import path from "path";
 import type { AutomatonConfig, TreasuryPolicy, ModelStrategyConfig, SoulConfig } from "./types.js";
 import { DEFAULT_CONFIG, DEFAULT_TREASURY_POLICY, DEFAULT_MODEL_STRATEGY_CONFIG, DEFAULT_SOUL_CONFIG } from "./types.js";
 import { getAutomatonDir } from "./identity/wallet.js";
-import { loadApiKeyFromConfig } from "./identity/provision.js";
 import { createLogger } from "./observability/logger.js";
 import type { ChainType } from "./identity/chain.js";
+import { disableConwayRuntimeFields, getRuntimeMode, hadLegacyConwayMode } from "./standalone.js";
 
 const logger = createLogger("config");
 const CONFIG_FILENAME = "automaton.json";
@@ -32,7 +32,10 @@ export function loadConfig(): AutomatonConfig | null {
 
   try {
     const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-    const apiKey = raw.conwayApiKey || loadApiKeyFromConfig();
+    const runtimeMode = getRuntimeMode(raw);
+    if (hadLegacyConwayMode(raw)) {
+      logger.warn("Legacy runtimeMode=conway found in config; converting to standalone and disabling Conway integrations.");
+    }
 
     // Deep-merge treasury policy with defaults
     const treasuryPolicy: TreasuryPolicy = {
@@ -61,19 +64,15 @@ export function loadConfig(): AutomatonConfig | null {
       ...(raw.soulConfig ?? {}),
     };
 
-    return {
+    return disableConwayRuntimeFields({
       ...DEFAULT_CONFIG,
       ...raw,
-      sandboxId:
-        typeof raw.sandboxId === "string"
-          ? raw.sandboxId.trim()
-          : DEFAULT_CONFIG.sandboxId,
-      conwayApiKey: apiKey,
+      runtimeMode,
       treasuryPolicy,
       modelStrategy,
       soulConfig,
       chainType: raw.chainType || "evm",
-    } as AutomatonConfig;
+    } as AutomatonConfig);
   } catch {
     return null;
   }
@@ -115,14 +114,15 @@ export function resolvePath(p: string): string {
  * Create a fresh config from setup wizard inputs.
  */
 export function createConfig(params: {
+  runtimeMode?: AutomatonConfig["runtimeMode"];
   name: string;
   genesisPrompt: string;
   creatorMessage?: string;
   creatorAddress: string;
-  registeredWithConway: boolean;
-  sandboxId: string;
-  walletAddress: string;
-  apiKey: string;
+  registeredWithConway?: boolean;
+  sandboxId?: string;
+  walletAddress?: string;
+  apiKey?: string;
   openaiApiKey?: string;
   anthropicApiKey?: string;
   ollamaBaseUrl?: string;
@@ -130,17 +130,17 @@ export function createConfig(params: {
   treasuryPolicy?: TreasuryPolicy;
   chainType?: ChainType;
 }): AutomatonConfig {
-  const normalizedSandboxId = (params.sandboxId || "").trim();
-  return {
+  const runtimeMode = getRuntimeMode(params);
+  return disableConwayRuntimeFields({
+    runtimeMode,
     name: params.name,
     genesisPrompt: params.genesisPrompt,
     creatorMessage: params.creatorMessage,
     creatorAddress: params.creatorAddress,
-    registeredWithConway: params.registeredWithConway,
-    sandboxId: normalizedSandboxId,
-    conwayApiUrl:
-      DEFAULT_CONFIG.conwayApiUrl || "https://api.conway.tech",
-    conwayApiKey: params.apiKey,
+    registeredWithConway: false,
+    sandboxId: "",
+    conwayApiUrl: "",
+    conwayApiKey: "",
     openaiApiKey: params.openaiApiKey,
     anthropicApiKey: params.anthropicApiKey,
     ollamaBaseUrl: params.ollamaBaseUrl,
@@ -150,12 +150,12 @@ export function createConfig(params: {
       DEFAULT_CONFIG.heartbeatConfigPath || "~/.automaton/heartbeat.yml",
     dbPath: DEFAULT_CONFIG.dbPath || "~/.automaton/state.db",
     logLevel: (DEFAULT_CONFIG.logLevel as AutomatonConfig["logLevel"]) || "info",
-    walletAddress: params.walletAddress,
+    walletAddress: params.walletAddress || "local://standalone",
     version: DEFAULT_CONFIG.version || "0.2.1",
     skillsDir: DEFAULT_CONFIG.skillsDir || "~/.automaton/skills",
     maxChildren: DEFAULT_CONFIG.maxChildren || 3,
     parentAddress: params.parentAddress,
     treasuryPolicy: params.treasuryPolicy ?? DEFAULT_TREASURY_POLICY,
     chainType: params.chainType || "evm",
-  };
+  });
 }

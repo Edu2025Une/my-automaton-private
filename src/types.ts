@@ -41,6 +41,7 @@ export interface ProvisionResult {
 // ─── Configuration ───────────────────────────────────────────────
 
 export interface AutomatonConfig {
+  runtimeMode: RuntimeMode;
   name: string;
   genesisPrompt: string;
   creatorMessage?: string;
@@ -77,8 +78,13 @@ export interface AutomatonConfig {
   chainType?: ChainType;
 }
 
+export type RuntimeMode = "standalone";
+
 export const DEFAULT_CONFIG: Partial<AutomatonConfig> = {
-  conwayApiUrl: "https://api.conway.tech",
+  runtimeMode: "standalone",
+  conwayApiUrl: "",
+  conwayApiKey: "",
+  sandboxId: "",
   inferenceModel: "gpt-5.2",
   maxTokensPerTurn: 4096,
   heartbeatConfigPath: "~/.automaton/heartbeat.yml",
@@ -89,7 +95,7 @@ export const DEFAULT_CONFIG: Partial<AutomatonConfig> = {
   maxChildren: 3,
   maxTurnsPerCycle: 25,
   childSandboxMemoryMb: 1024,
-  socialRelayUrl: "https://social.conway.tech",
+  socialRelayUrl: undefined,
 };
 
 // ─── Agent State ─────────────────────────────────────────────────
@@ -586,7 +592,7 @@ export const DEFAULT_TREASURY_POLICY: TreasuryPolicy = {
   maxDailyTransferCents: 25000,
   minimumReserveCents: 1000,
   maxX402PaymentCents: 100,
-  x402AllowedDomains: ['conway.tech'],
+  x402AllowedDomains: [],
   transferCooldownMs: 0,
   maxTransfersPerTurn: 2,
   maxInferenceDailyCents: 50000,

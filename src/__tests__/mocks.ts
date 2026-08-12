@@ -340,12 +340,13 @@ export function createTestConfig(
 ): AutomatonConfig {
   return {
     name: "test-automaton",
+    runtimeMode: "standalone",
     genesisPrompt: "You are a test automaton.",
     creatorAddress: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd" as `0x${string}`,
-    registeredWithConway: true,
-    sandboxId: "test-sandbox-id",
-    conwayApiUrl: "https://api.conway.tech",
-    conwayApiKey: "test-api-key",
+    registeredWithConway: false,
+    sandboxId: "",
+    conwayApiUrl: "",
+    conwayApiKey: "",
     inferenceModel: "mock-model",
     maxTokensPerTurn: 4096,
     heartbeatConfigPath: "/tmp/test-heartbeat.yml",
@@ -356,7 +357,7 @@ export function createTestConfig(
     skillsDir: "/tmp/test-skills",
     maxChildren: 3,
     maxTurnsPerCycle: 25,
-    socialRelayUrl: "https://social.conway.tech",
+    socialRelayUrl: undefined,
     ...overrides,
   };
 }

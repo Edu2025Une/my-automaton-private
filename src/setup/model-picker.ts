@@ -18,7 +18,6 @@ import { promptOptional, closePrompts } from "./prompts.js";
 const PROVIDER_LABEL: Record<string, string> = {
   openai: "OpenAI",
   anthropic: "Anthropic",
-  conway: "Conway",
   ollama: "Ollama",
   other: "Other",
 };
@@ -43,7 +42,7 @@ export async function runModelPicker(): Promise<void> {
     await discoverOllamaModels(ollamaBaseUrl, db.raw);
   }
 
-  const models = registry.getAll().filter((m) => m.enabled);
+  const models = registry.getAll().filter((m) => m.enabled && m.provider !== "conway");
 
   if (models.length === 0) {
     console.log(chalk.yellow("  No models available in registry."));

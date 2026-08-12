@@ -108,8 +108,37 @@ function isForbiddenCommand(command: string, sandboxId: string): string | null {
 
 // ─── Built-in Tools ────────────────────────────────────────────
 
+export const REMOVED_STANDALONE_TOOL_NAMES = new Set([
+  "check_credits",
+  "check_usdc_balance",
+  "topup_credits",
+  "transfer_credits",
+  "x402_fetch",
+  "create_sandbox",
+  "delete_sandbox",
+  "list_sandboxes",
+  "search_domains",
+  "register_domain",
+  "manage_dns",
+  "register_erc8004",
+  "update_agent_card",
+  "discover_agents",
+  "give_feedback",
+  "check_reputation",
+  "spawn_child",
+  "fund_child",
+  "check_child_status",
+  "start_child",
+  "message_child",
+  "verify_child_constitution",
+  "prune_dead_children",
+  "send_message",
+  "list_models",
+  "switch_model",
+]);
+
 export function createBuiltinTools(sandboxId: string): AutomatonTool[] {
-  return [
+  const tools: AutomatonTool[] = [
     // ── VM/Sandbox Tools ──
     {
       name: "exec",
@@ -3209,6 +3238,8 @@ Model: ${ctx.inference.getDefaultModel()}
       },
     },
   ];
+
+  return tools.filter((tool) => !REMOVED_STANDALONE_TOOL_NAMES.has(tool.name));
 }
 
 /**
@@ -3227,7 +3258,9 @@ export function loadInstalledTools(db: {
 }): AutomatonTool[] {
   try {
     const installed = db.getInstalledTools();
-    return installed.map((tool) => ({
+    return installed
+      .filter((tool) => !REMOVED_STANDALONE_TOOL_NAMES.has(tool.name))
+      .map((tool) => ({
       name: tool.name,
       description: `Installed tool: ${tool.name}`,
       category: (tool.type === "mcp" ? "conway" : "vm") as ToolCategory,

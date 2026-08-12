@@ -5,7 +5,6 @@
  * This is the automaton's consciousness. When this runs, it is alive.
  */
 
-import path from "node:path";
 import type {
   AutomatonIdentity,
   AutomatonConfig,
@@ -35,8 +34,7 @@ import {
   executeTool,
 } from "./tools.js";
 import { sanitizeInput } from "./injection-defense.js";
-import { getSurvivalTier } from "../conway/credits.js";
-import { getUsdcBalance } from "../conway/x402.js";
+import { getSurvivalTier } from "../survival/tiers.js";
 import {
   claimInboxMessages,
   markInboxProcessed,
@@ -54,16 +52,6 @@ import { MemoryIngestionPipeline } from "../memory/ingestion.js";
 import { DEFAULT_MEMORY_BUDGET } from "../types.js";
 import { formatMemoryBlock } from "./context.js";
 import { createLogger } from "../observability/logger.js";
-import { Orchestrator } from "../orchestration/orchestrator.js";
-import { PlanModeController } from "../orchestration/plan-mode.js";
-import { generateTodoMd, injectTodoContext } from "../orchestration/attention.js";
-import { ColonyMessaging, LocalDBTransport } from "../orchestration/messaging.js";
-import { LocalWorkerPool } from "../orchestration/local-worker.js";
-import { SimpleAgentTracker, SimpleFundingProtocol } from "../orchestration/simple-tracker.js";
-import { HarnessRegistry } from "./harness-registry.js";
-import { createWorkerInferenceBridge } from "./worker-inference-bridge.js";
-import { ProviderRegistry } from "../inference/provider-registry.js";
-import { UnifiedInferenceClient } from "../inference/inference-client.js";
 import { isIdleOnlyTool } from "./idle-only-tools.js";
 
 const logger = createLogger("loop");
@@ -93,7 +81,7 @@ export interface AgentLoopOptions {
 export async function runAgentLoop(
   options: AgentLoopOptions,
 ): Promise<void> {
-  const { identity, config, db, conway, inference, social, skills, policyEngine, spendTracker, onStateChange, onTurnComplete, ollamaBaseUrl } =
+  const { identity, config, db, conway, inference, social, skills, policyEngine, spendTracker, onStateChange, onTurnComplete } =
     options;
 
   const builtinTools = createBuiltinTools(identity.sandboxId);
@@ -116,222 +104,11 @@ export async function runAgentLoop(
   const modelRegistry = new ModelRegistry(db.raw);
   modelRegistry.initialize();
 
-  // Discover Ollama models if configured
-  if (ollamaBaseUrl) {
-    const { discoverOllamaModels } = await import("../ollama/discover.js");
-    await discoverOllamaModels(ollamaBaseUrl, db.raw);
-  }
+  // Avoid automatic network discovery during startup; explicit model picking can refresh Ollama.
   const budgetTracker = new InferenceBudgetTracker(db.raw, modelStrategyConfig);
   const inferenceRouter = new InferenceRouter(db.raw, modelRegistry, budgetTracker);
 
-  // Optional orchestration bootstrap (requires V9 goals/task tables)
-  let planModeController: PlanModeController | undefined;
-  let orchestrator: Orchestrator | undefined;
-  let workerPool: LocalWorkerPool | undefined;
-
-  if (hasTable(db.raw, "goals")) {
-    try {
-      planModeController = new PlanModeController(db.raw);
-
-      // Bridge automaton config API keys to env vars for the provider registry.
-      // The registry reads keys from process.env; the automaton config may have
-      // them from config.json or Conway provisioning.
-      if (config.openaiApiKey && !process.env.OPENAI_API_KEY) {
-        process.env.OPENAI_API_KEY = config.openaiApiKey;
-      }
-      if (config.anthropicApiKey && !process.env.ANTHROPIC_API_KEY) {
-        process.env.ANTHROPIC_API_KEY = config.anthropicApiKey;
-      }
-      // Conway Compute API is OpenAI-compatible. Use it as fallback when no
-      // direct OpenAI key is available. The conwayApiKey is always present
-      // (required for sandbox operations), so this ensures the orchestrator
-      // can always make inference calls.
-      if (config.conwayApiKey && !process.env.CONWAY_API_KEY) {
-        process.env.CONWAY_API_KEY = config.conwayApiKey;
-      }
-      // If no OpenAI key is set but Conway key is available, use Conway as
-      // the OpenAI provider (Conway Compute is OpenAI API-compatible).
-      if (!process.env.OPENAI_API_KEY && config.conwayApiKey) {
-        process.env.OPENAI_API_KEY = config.conwayApiKey;
-        process.env.OPENAI_BASE_URL = `${config.conwayApiUrl}/v1`;
-      }
-
-      const providersPath = path.join(
-        process.env.HOME || process.cwd(),
-        ".automaton",
-        "inference-providers.json",
-      );
-      const registry = ProviderRegistry.fromConfig(providersPath);
-
-      // If OPENAI_BASE_URL was set (Conway fallback), update the default
-      // provider's baseUrl so the OpenAI client points to Conway Compute.
-      if (process.env.OPENAI_BASE_URL) {
-        registry.overrideBaseUrl("openai", process.env.OPENAI_BASE_URL);
-      }
-
-      const unifiedInference = new UnifiedInferenceClient(registry);
-      const agentTracker = new SimpleAgentTracker(db);
-      const funding = new SimpleFundingProtocol(conway, identity, db);
-      const messaging = new ColonyMessaging(
-        new LocalDBTransport(db),
-        db,
-      );
-
-      const harnessRegistry = new HarnessRegistry();
-
-      // Adapter: local workers use the unified inference path so planner-backed
-      // harnesses can preserve tier + responseFormat contracts.
-      const workerInference = createWorkerInferenceBridge(unifiedInference);
-
-      // Local worker pool: runs inference-driven agents in-process
-      // as async tasks. Falls back from Conway sandbox spawning.
-      const initializedWorkerPool = new LocalWorkerPool({
-        db: db.raw,
-        inference: workerInference,
-        conway,
-        harnessRegistry,
-        identity,
-        config,
-        allowedEditRoot: process.cwd(),
-        tools,
-        toolContext,
-        policyEngine,
-        spendTracker,
-      });
-      workerPool = initializedWorkerPool;
-
-      orchestrator = new Orchestrator({
-        db: db.raw,
-        agentTracker,
-        funding,
-        messaging,
-        inference: unifiedInference,
-        identity,
-        isWorkerAlive: (address: string) => {
-          if (address.startsWith("local://")) {
-            return initializedWorkerPool.hasWorker(address);
-          }
-          // Remote workers: check children table
-          const child = db.raw.prepare(
-            "SELECT status FROM children WHERE sandbox_id = ? OR address = ?",
-          ).get(address, address) as { status: string } | undefined;
-          if (!child) return false;
-          return !["failed", "dead", "cleaned_up"].includes(child.status);
-        },
-        config: {
-          ...config,
-          spawnAgent: async (task: any) => {
-            // Try Conway sandbox spawn first (production)
-            try {
-              const { generateGenesisConfig } = await import("../replication/genesis.js");
-              const { spawnChild } = await import("../replication/spawn.js");
-              const { ChildLifecycle } = await import("../replication/lifecycle.js");
-
-              const role = task.agentRole ?? "generalist";
-              const genesis = generateGenesisConfig(identity, config, {
-                name: `worker-${role}-${Date.now().toString(36)}`,
-                specialization: `${role}: ${task.title}`,
-              });
-
-              const lifecycle = new ChildLifecycle(db.raw);
-              const child = await spawnChild(conway, identity, db, genesis, lifecycle);
-
-              return {
-                address: child.address,
-                name: child.name,
-                sandboxId: child.sandboxId,
-              };
-            } catch (sandboxError: any) {
-              // If the error is a 402 (insufficient credits), attempt topup and retry once
-              const is402 = sandboxError?.status === 402 ||
-                sandboxError?.message?.includes("INSUFFICIENT_CREDITS");
-
-              if (is402) {
-                const SANDBOX_TOPUP_COOLDOWN_MS = 60_000;
-                const lastAttempt = db.getKV("last_sandbox_topup_attempt");
-                const cooldownExpired = !lastAttempt ||
-                  Date.now() - new Date(lastAttempt).getTime() >= SANDBOX_TOPUP_COOLDOWN_MS;
-
-                if (cooldownExpired) {
-                  db.setKV("last_sandbox_topup_attempt", new Date().toISOString());
-                  try {
-                    const { topupForSandbox } = await import("../conway/topup.js");
-                    const topupResult = await topupForSandbox({
-                      apiUrl: config.conwayApiUrl,
-                      account: identity.account,
-                      error: sandboxError,
-                      chainType: config.chainType || identity.chainType || "evm",
-                    });
-
-                    if (topupResult?.success) {
-                      logger.info(`Sandbox topup succeeded ($${topupResult.amountUsd}), retrying spawn`, {
-                        taskId: task.id,
-                      });
-                      // Retry spawn once after successful topup
-                      try {
-                        const { generateGenesisConfig: genGenesis } = await import("../replication/genesis.js");
-                        const { spawnChild: retrySpawn } = await import("../replication/spawn.js");
-                        const { ChildLifecycle: RetryLifecycle } = await import("../replication/lifecycle.js");
-
-                        const retryRole = task.agentRole ?? "generalist";
-                        const retryGenesis = genGenesis(identity, config, {
-                          name: `worker-${retryRole}-${Date.now().toString(36)}`,
-                          specialization: `${retryRole}: ${task.title}`,
-                        });
-                        const retryLifecycle = new RetryLifecycle(db.raw);
-                        const child = await retrySpawn(conway, identity, db, retryGenesis, retryLifecycle);
-                        return {
-                          address: child.address,
-                          name: child.name,
-                          sandboxId: child.sandboxId,
-                        };
-                      } catch (retryError) {
-                        logger.warn("Spawn retry after topup failed", {
-                          taskId: task.id,
-                          error: retryError instanceof Error ? retryError.message : String(retryError),
-                        });
-                      }
-                    }
-                  } catch (topupError) {
-                    logger.warn("Sandbox topup attempt failed", {
-                      taskId: task.id,
-                      error: topupError instanceof Error ? topupError.message : String(topupError),
-                    });
-                  }
-                }
-              }
-
-              // Conway sandbox unavailable — fall back to local worker
-              logger.info("Conway sandbox unavailable, spawning local worker", {
-                taskId: task.id,
-                error: sandboxError instanceof Error ? sandboxError.message : String(sandboxError),
-              });
-
-              try {
-                const spawned = initializedWorkerPool.spawn(task);
-                return spawned;
-              } catch (localError) {
-                logger.warn("Failed to spawn local worker", {
-                  taskId: task.id,
-                  error: localError instanceof Error ? localError.message : String(localError),
-                });
-                return null;
-              }
-            }
-          },
-        },
-      });
-    } catch (error) {
-      logger.warn(
-        `Orchestrator initialization failed, continuing without orchestration: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-      planModeController = undefined;
-      orchestrator = undefined;
-    }
-  }
-
+  // Orchestration/sandbox spawning is disabled in standalone mode until rebuilt as local-only.
   // Set start time
   if (!db.getKV("start_time")) {
     db.setKV("start_time", new Date().toISOString());
@@ -358,7 +135,7 @@ export async function runAgentLoop(
   onStateChange?.("waking");
 
   // Get financial state
-  let financial = await getFinancialState(conway, identity.address, db, config.chainType || identity.chainType || "evm");
+  let financial = getStandaloneFinancialState();
 
   // Check if this is the first run
   const isFirstRun = db.getTurnCount() === 0;
@@ -426,7 +203,7 @@ export async function runAgentLoop(
       }
 
       // Refresh financial state periodically
-      financial = await getFinancialState(conway, identity.address, db, config.chainType || identity.chainType || "evm");
+      financial = getStandaloneFinancialState();
 
       // Check survival tier
       // api_unreachable: creditsCents === -1 means API failed with no cache.
@@ -437,39 +214,7 @@ export async function runAgentLoop(
       } else {
         const tier = getSurvivalTier(financial.creditsCents);
 
-        // Inline auto-topup: if credits are critically low and USDC is
-        // available, buy credits NOW — before attempting inference.
-        // This prevents the agent from dying mid-loop while waiting for
-        // the heartbeat to fire. Uses a 60s cooldown to avoid hammering.
-        if ((tier === "critical" || tier === "low_compute") && financial.usdcBalance >= 5) {
-          const INLINE_TOPUP_COOLDOWN_MS = 60_000;
-          const lastInlineTopup = db.getKV("last_inline_topup_attempt");
-          const cooldownExpired = !lastInlineTopup ||
-            Date.now() - new Date(lastInlineTopup).getTime() >= INLINE_TOPUP_COOLDOWN_MS;
-
-          if (cooldownExpired) {
-            db.setKV("last_inline_topup_attempt", new Date().toISOString());
-            try {
-              const { bootstrapTopup } = await import("../conway/topup.js");
-              const topupResult = await bootstrapTopup({
-                apiUrl: config.conwayApiUrl,
-                account: identity.account,
-                creditsCents: financial.creditsCents,
-                chainType: config.chainType || identity.chainType || "evm",
-              });
-              if (topupResult?.success) {
-                log(config, `[AUTO-TOPUP] Bought $${topupResult.amountUsd} credits from USDC mid-loop`);
-                // Re-fetch financial state after topup so the rest of
-                // the turn sees the updated balance.
-                financial = await getFinancialState(conway, identity.address, db, config.chainType || identity.chainType || "evm");
-              }
-            } catch (err: any) {
-              logger.warn(`Inline auto-topup failed: ${err.message}`);
-            }
-          }
-        }
-
-        // Re-evaluate tier after potential topup
+        // Re-evaluate tier from standalone local budget state.
         const effectiveTier = getSurvivalTier(financial.creditsCents);
 
         if (effectiveTier === "critical") {
@@ -535,58 +280,6 @@ export async function runAgentLoop(
       // Inject memory block after system prompt, before conversation history
       if (memoryBlock) {
         messages.splice(1, 0, { role: "system", content: memoryBlock });
-      }
-
-      if (orchestrator) {
-        const orchestratorTick = await orchestrator.tick();
-        db.setKV("orchestrator.last_tick", JSON.stringify(orchestratorTick));
-        const localWorkersActive = workerPool?.getActiveCount() ?? 0;
-        const hasSelfAssignedParentTask = !!db.raw.prepare(
-          `SELECT 1 FROM task_graph WHERE assigned_to = ? AND status IN ('assigned', 'running') LIMIT 1`,
-        ).get(identity.address);
-
-        if (
-          orchestratorTick.phase === "executing" &&
-          orchestratorTick.tasksAssigned === 0 &&
-          orchestratorTick.tasksCompleted === 0 &&
-          orchestratorTick.tasksFailed === 0 &&
-          !hasSelfAssignedParentTask &&
-          (orchestratorTick.agentsActive > 0 || localWorkersActive > 0)
-        ) {
-          log(
-            config,
-            "[ORCHESTRATOR] All delegated work is active and no self-assigned parent task remains. Sleeping to avoid idle loop.",
-          );
-          db.setKV("sleep_until", new Date(Date.now() + 60_000).toISOString());
-          db.setAgentState("sleeping");
-          onStateChange?.("sleeping");
-          running = false;
-          break;
-        }
-
-        if (
-          orchestratorTick.tasksAssigned > 0 ||
-          orchestratorTick.tasksCompleted > 0 ||
-          orchestratorTick.tasksFailed > 0
-        ) {
-          log(
-            config,
-            `[ORCHESTRATOR] phase=${orchestratorTick.phase} assigned=${orchestratorTick.tasksAssigned} completed=${orchestratorTick.tasksCompleted} failed=${orchestratorTick.tasksFailed}`,
-          );
-        }
-      }
-
-      if (planModeController) {
-        try {
-          const todoMd = generateTodoMd(db.raw);
-          messages = injectTodoContext(messages, todoMd);
-        } catch (error) {
-          logger.warn(
-            `todo.md context injection skipped: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          );
-        }
       }
 
       // Capture input before clearing
@@ -666,7 +359,7 @@ export async function runAgentLoop(
             policyEngine,
             spendTracker ? {
               inputSource: currentInputSource,
-              turnToolCallCount: turn.toolCalls.filter(t => t.name === "transfer_credits").length,
+              turnToolCallCount: turn.toolCalls.length,
               sessionSpend: spendTracker,
             } : undefined,
           );
@@ -834,19 +527,17 @@ export async function runAgentLoop(
       // (no mutations — only read/check/list/info tools), count as idle.
       // Use a blocklist of mutating tools rather than an allowlist of safe ones.
       const MUTATING_TOOLS = new Set([
-        "exec", "write_file", "edit_own_file", "transfer_credits", "topup_credits", "fund_child",
-        "spawn_child", "start_child", "delete_sandbox", "create_sandbox",
+        "exec", "write_file", "edit_own_file",
         "install_npm_package", "install_mcp_server", "install_skill",
         "create_skill", "remove_skill", "install_skill_from_git",
         "install_skill_from_url", "pull_upstream", "git_commit", "git_push",
-        "git_branch", "git_clone", "send_message", "message_child",
-        "register_domain", "register_erc8004", "give_feedback",
-        "update_genesis_prompt", "update_agent_card", "modify_heartbeat",
-        "expose_port", "remove_port", "x402_fetch", "manage_dns",
-        "distress_signal", "prune_dead_children", "sleep",
+        "git_branch", "git_clone",
+        "update_genesis_prompt", "modify_heartbeat",
+        "expose_port", "remove_port",
+        "distress_signal", "sleep",
         "update_soul", "remember_fact", "set_goal", "complete_goal",
         "save_procedure", "note_about_agent", "forget",
-        "enter_low_compute", "switch_model", "review_upstream_changes",
+        "enter_low_compute", "review_upstream_changes",
       ]);
       const didMutate = turn.toolCalls.some((tc) => MUTATING_TOOLS.has(tc.name));
 
@@ -938,89 +629,14 @@ export async function runAgentLoop(
 
 // ─── Helpers ───────────────────────────────────────────────────
 
-// Cache last known good balances so transient API failures don't
-// cause the automaton to believe it has $0 and kill itself.
-let _lastKnownCredits = 0;
-let _lastKnownUsdc = 0;
-
-async function getFinancialState(
-  conway: ConwayClient,
-  address: string,
-  db?: AutomatonDatabase,
-  chainType?: string,
-): Promise<FinancialState> {
-  let creditsCents = _lastKnownCredits;
-  let usdcBalance = _lastKnownUsdc;
-
-  try {
-    creditsCents = await conway.getCreditsBalance();
-    if (creditsCents > 0) _lastKnownCredits = creditsCents;
-  } catch (error) {
-    logger.error("Credits balance fetch failed", error instanceof Error ? error : undefined);
-    // Use last known balance from KV, not zero
-    if (db) {
-      const cached = db.getKV("last_known_balance");
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          logger.warn("Balance API failed, using cached balance");
-          return {
-            creditsCents: parsed.creditsCents ?? 0,
-            usdcBalance: parsed.usdcBalance ?? 0,
-            lastChecked: new Date().toISOString(),
-          };
-        } catch (parseError) {
-          logger.error("Failed to parse cached balance", parseError instanceof Error ? parseError : undefined);
-        }
-      }
-    }
-    // No cache available -- return conservative non-zero sentinel
-    logger.error("Balance API failed, no cache available");
-    return {
-      creditsCents: -1,
-      usdcBalance: -1,
-      lastChecked: new Date().toISOString(),
-    };
-  }
-
-  try {
-    const network = chainType === "solana" ? "solana:mainnet" : "eip155:8453";
-    usdcBalance = await getUsdcBalance(address, network, chainType as any);
-    if (usdcBalance > 0) _lastKnownUsdc = usdcBalance;
-  } catch (error) {
-    logger.error("USDC balance fetch failed", error instanceof Error ? error : undefined);
-  }
-
-  // Cache successful balance reads
-  if (db) {
-    try {
-      db.setKV(
-        "last_known_balance",
-        JSON.stringify({ creditsCents, usdcBalance }),
-      );
-    } catch (error) {
-      logger.error("Failed to cache balance", error instanceof Error ? error : undefined);
-    }
-  }
-
+function getStandaloneFinancialState(): FinancialState {
   return {
-    creditsCents,
-    usdcBalance,
+    creditsCents: 10_000,
+    usdcBalance: 0,
     lastChecked: new Date().toISOString(),
   };
 }
 
 function log(_config: AutomatonConfig, message: string): void {
   logger.info(message);
-}
-
-function hasTable(db: AutomatonDatabase["raw"], tableName: string): boolean {
-  try {
-    const row = db
-      .prepare("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = ?")
-      .get(tableName) as { ok?: number } | undefined;
-    return Boolean(row?.ok);
-  } catch {
-    return false;
-  }
 }

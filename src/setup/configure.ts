@@ -101,7 +101,6 @@ async function askChoice<T extends string>(
 const PROVIDER_LABEL: Record<string, string> = {
   openai: "OpenAI",
   anthropic: "Anthropic",
-  conway: "Conway",
   ollama: "Ollama",
   other: "Other",
 };
@@ -174,7 +173,6 @@ function printMainMenu(config: AutomatonConfig): void {
     config.openaiApiKey ? "OpenAI" : null,
     config.anthropicApiKey ? "Anthropic" : null,
     config.ollamaBaseUrl ? "Ollama" : null,
-    "Conway",
   ].filter(Boolean).join(", ");
 
   const strategy = config.modelStrategy ?? DEFAULT_MODEL_STRATEGY_CONFIG;
@@ -198,10 +196,11 @@ async function configureProviders(config: AutomatonConfig): Promise<void> {
   console.log(chalk.cyan("\n  ── Inference Providers ─────────────────────────\n"));
   console.log(chalk.dim("  Press Enter to keep the current value. Type - to clear an optional field.\n"));
 
-  config.conwayApiKey = await askRequiredString(
-    "Conway API key",
-    config.conwayApiKey,
-  );
+  config.conwayApiKey = "";
+  config.conwayApiUrl = "";
+  config.sandboxId = "";
+  config.registeredWithConway = false;
+  config.socialRelayUrl = undefined;
 
   config.openaiApiKey = await askString("OpenAI API key  (sk-...)", config.openaiApiKey) || undefined;
   config.anthropicApiKey = await askString("Anthropic API key  (sk-ant-...)", config.anthropicApiKey) || undefined;
@@ -228,7 +227,7 @@ async function configureModelStrategy(config: AutomatonConfig): Promise<void> {
     await discoverOllamaModels(ollamaBaseUrl, db.raw);
   }
 
-  const models = registry.getAll().filter((m) => m.enabled);
+  const models = registry.getAll().filter((m) => m.enabled && m.provider !== "conway");
   db.close();
 
   const s: ModelStrategyConfig = {
@@ -279,7 +278,8 @@ async function configureTreasury(config: AutomatonConfig): Promise<void> {
   t.maxHourlyTransferCents = await askNumber("Max hourly transfers", t.maxHourlyTransferCents);
   t.maxDailyTransferCents = await askNumber("Max daily transfers", t.maxDailyTransferCents);
   t.minimumReserveCents = await askNumber("Minimum reserve", t.minimumReserveCents);
-  t.maxX402PaymentCents = await askNumber("Max x402 payment", t.maxX402PaymentCents);
+  t.maxX402PaymentCents = 0;
+  t.x402AllowedDomains = [];
   t.maxInferenceDailyCents = await askNumber("Max daily inference spend", t.maxInferenceDailyCents);
   t.requireConfirmationAboveCents = await askNumber(
     "Require confirmation above",
@@ -301,8 +301,7 @@ async function configureGeneral(config: AutomatonConfig): Promise<void> {
     ["debug", "info", "warn", "error"] as const,
     config.logLevel,
   );
-  config.maxChildren = await askNumber("Max child automatons", config.maxChildren);
-  config.socialRelayUrl = (await askString("Social relay URL", config.socialRelayUrl)) || undefined;
+  config.socialRelayUrl = undefined;
   config.rpcUrl = (await askString("RPC endpoint  (Base chain, e.g. https://mainnet.base.org)", config.rpcUrl)) || undefined;
 
   console.log("");
