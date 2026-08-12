@@ -8,7 +8,6 @@
 import type { PolicyRule, PolicyRequest, PolicyRuleResult } from "../../types.js";
 
 const PACKAGE_NAME_RE = /^[@a-zA-Z0-9._/-]+$/;
-const SKILL_NAME_RE = /^[a-zA-Z0-9-]+$/;
 const GIT_HASH_RE = /^[a-f0-9]{7,40}$/;
 const CRON_PARTS_RE = /^(\*|[\d,*/-]+)\s+(\*|[\d,*/-]+)\s+(\*|[\d,*/-]+)\s+(\*|[\d,*/-]+)\s+(\*|[\d,*/-]+)$/;
 
@@ -26,7 +25,7 @@ function createPackageNameRule(): PolicyRule {
     priority: 100,
     appliesTo: {
       by: "name",
-      names: ["install_npm_package", "install_mcp_server"],
+      names: ["install_npm_package"],
     },
     evaluate(request: PolicyRequest): PolicyRuleResult | null {
       const pkg = request.args.package as string | undefined;
@@ -37,34 +36,6 @@ function createPackageNameRule(): PolicyRule {
           "validate.package_name",
           "VALIDATION_FAILED",
           `Invalid package name: "${pkg}". Must match ${PACKAGE_NAME_RE.source}`,
-        );
-      }
-      return null;
-    },
-  };
-}
-
-/**
- * Validate skill name format.
- */
-function createSkillNameRule(): PolicyRule {
-  return {
-    id: "validate.skill_name",
-    description: "Validate skill name format (alphanumeric + hyphens only)",
-    priority: 100,
-    appliesTo: {
-      by: "name",
-      names: ["install_skill", "create_skill", "remove_skill"],
-    },
-    evaluate(request: PolicyRequest): PolicyRuleResult | null {
-      const name = request.args.name as string | undefined;
-      if (name === undefined) return null;
-
-      if (!SKILL_NAME_RE.test(name)) {
-        return deny(
-          "validate.skill_name",
-          "VALIDATION_FAILED",
-          `Invalid skill name: "${name}". Must match ${SKILL_NAME_RE.source}`,
         );
       }
       return null;
@@ -159,7 +130,6 @@ function createCronExpressionRule(): PolicyRule {
 export function createValidationRules(): PolicyRule[] {
   return [
     createPackageNameRule(),
-    createSkillNameRule(),
     createGitHashRule(),
     createPortRangeRule(),
     createCronExpressionRule(),

@@ -525,9 +525,7 @@ export async function runAgentLoop(
       // Use a blocklist of mutating tools rather than an allowlist of safe ones.
       const MUTATING_TOOLS = new Set([
         "exec", "write_file", "edit_own_file",
-        "install_npm_package", "install_mcp_server", "install_skill",
-        "create_skill", "remove_skill", "install_skill_from_git",
-        "install_skill_from_url", "pull_upstream", "git_commit", "git_push",
+        "install_npm_package", "pull_upstream", "git_commit", "git_push",
         "git_branch", "git_clone",
         "update_genesis_prompt", "modify_heartbeat",
         "expose_port", "remove_port",

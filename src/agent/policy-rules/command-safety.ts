@@ -16,10 +16,6 @@ const SHELL_INTERPOLATED_TOOLS = new Set([
   "exec",
   "pull_upstream",
   "install_npm_package",
-  "install_mcp_server",
-  "install_skill",
-  "create_skill",
-  "remove_skill",
 ]);
 
 // Fields per tool that get interpolated into shell commands
@@ -27,10 +23,6 @@ const SHELL_FIELDS: Record<string, string[]> = {
   exec: [], // exec is the shell itself, handled by forbidden_patterns
   pull_upstream: ["commit"],
   install_npm_package: ["package"],
-  install_mcp_server: ["package", "name"],
-  install_skill: ["name", "url"],
-  create_skill: ["name"],
-  remove_skill: ["name"],
 };
 
 // Forbidden command patterns (migrated from tools.ts isForbiddenCommand)

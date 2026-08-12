@@ -15,7 +15,7 @@ import type { SkillFrontmatter, Skill, SkillSource } from "../types.js";
 export function parseSkillMd(
   content: string,
   filePath: string,
-  source: SkillSource = "builtin",
+  source: SkillSource = "local",
 ): Skill | null {
   const trimmed = content.trim();
   if (!trimmed.startsWith("---")) {
@@ -25,7 +25,7 @@ export function parseSkillMd(
     return {
       name,
       description: "",
-      autoActivate: true,
+      autoActivate: false,
       instructions: trimmed,
       source,
       path: filePath,
@@ -52,7 +52,7 @@ export function parseSkillMd(
   return {
     name: frontmatter.name || extractNameFromPath(filePath),
     description: frontmatter.description || "",
-    autoActivate: frontmatter["auto-activate"] !== false,
+    autoActivate: frontmatter["auto-activate"] === true,
     requires: frontmatter.requires,
     instructions: body,
     source,

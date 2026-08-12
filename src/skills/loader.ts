@@ -8,9 +8,9 @@
 
 import { execFileSync } from "child_process";
 import fs from "fs";
-import path from "path";
 import type { Skill, AutomatonDatabase } from "../types.js";
 import { parseSkillMd } from "./format.js";
+import { resolveSkillMdPath, resolveSkillsRoot, validateLocalSkillContent } from "./registry.js";
 import { sanitizeInput } from "../agent/injection-defense.js";
 import { createLogger } from "../observability/logger.js";
 
@@ -42,23 +42,30 @@ export function loadSkills(
   skillsDir: string,
   db: AutomatonDatabase,
 ): Skill[] {
-  const resolvedDir = resolveHome(skillsDir);
+  const existingSkills = db.getSkills(true);
+  const disablePersistedSkills = () => {
+    for (const skill of existingSkills) {
+      db.removeSkill(skill.name);
+    }
+  };
 
-  if (!fs.existsSync(resolvedDir)) {
-    return db.getSkills(true);
+  const resolvedDir = resolveSkillsRoot(skillsDir);
+  if (!resolvedDir) {
+    disablePersistedSkills();
+    return [];
   }
 
   const entries = fs.readdirSync(resolvedDir, { withFileTypes: true });
   const loaded: Skill[] = [];
+  const seen = new Set<string>();
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
 
-    const skillMdPath = path.join(resolvedDir, entry.name, "SKILL.md");
-    if (!fs.existsSync(skillMdPath)) continue;
-
     try {
+      const skillMdPath = resolveSkillMdPath(resolvedDir, entry.name);
       const content = fs.readFileSync(skillMdPath, "utf-8");
+      validateLocalSkillContent(content, skillMdPath);
       const skill = parseSkillMd(content, skillMdPath);
       if (!skill) continue;
 
@@ -74,15 +81,21 @@ export function loadSkills(
         skill.installedAt = existing.installedAt;
       }
 
-      db.upsertSkill(skill);
+      db.upsertSkill({ ...skill, instructions: "" });
       loaded.push(skill);
+      seen.add(skill.name);
     } catch {
       // Skip invalid skill files
     }
   }
 
-  // Return all enabled skills (includes DB-only skills not on disk)
-  return db.getSkills(true);
+  for (const skill of existingSkills) {
+    if (!seen.has(skill.name)) {
+      db.removeSkill(skill.name);
+    }
+  }
+
+  return loaded.filter((skill) => skill.enabled);
 }
 
 /**
@@ -182,11 +195,4 @@ export function getActiveSkillInstructions(skills: Skill[]): string {
   }
 
   return sections.join("\n\n");
-}
-
-function resolveHome(p: string): string {
-  if (p.startsWith("~")) {
-    return path.join(process.env.HOME || "/root", p.slice(1));
-  }
-  return p;
 }

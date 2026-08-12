@@ -140,10 +140,10 @@ export async function runSetupWizard(): Promise<AutomatonConfig> {
   fs.writeFileSync(soulPath, generateSoulMd(name, walletAddress, creatorAddress, genesisPrompt), { mode: 0o600 });
   console.log(chalk.green("  SOUL.md written"));
 
-  // Default skills
+  // Skills
   const skillsDir = config.skillsDir || "~/.automaton/skills";
   installDefaultSkills(skillsDir);
-  console.log(chalk.green("  Default skills installed.\n"));
+  console.log(chalk.green("  Skills directory left local-only; no default skills auto-installed.\n"));
 
   closePrompts();
 

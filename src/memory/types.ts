@@ -51,7 +51,6 @@ const STRATEGIC_TOOLS = new Set([
   "update_genesis_prompt",
   "edit_own_file",
   "modify_heartbeat",
-  "install_mcp_server",
   "update_soul",
 ]);
 
@@ -66,8 +65,6 @@ const PRODUCTIVE_TOOLS = new Set([
   "expose_port",
   "register_domain",
   "manage_dns",
-  "install_skill",
-  "create_skill",
   "save_procedure",
   "set_goal",
 ]);

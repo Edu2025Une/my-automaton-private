@@ -58,10 +58,6 @@ describe("Tool Risk Level Classification", () => {
     install_npm_package: "dangerous",
     pull_upstream: "dangerous",
     update_genesis_prompt: "dangerous",
-    install_mcp_server: "dangerous",
-    install_skill: "dangerous",
-    create_skill: "dangerous",
-    remove_skill: "dangerous",
     distress_signal: "dangerous",
   };
 
@@ -506,7 +502,7 @@ describe("Tool category assignments", () => {
   });
 });
 
-// ─── install_npm_package / install_mcp_server Inline Validation ──
+// ─── install_npm_package Inline Validation ──
 
 describe("package install inline validation", () => {
   let tools: AutomatonTool[];
@@ -548,12 +544,6 @@ describe("package install inline validation", () => {
       expect(conway.execCalls.length).toBe(0);
     });
 
-    it(`install_mcp_server blocks: ${pkg.slice(0, 40)}`, async () => {
-      const tool = tools.find((t) => t.name === "install_mcp_server")!;
-      const result = await tool.execute({ package: pkg, name: "test" }, ctx);
-      expect(result).toContain("Blocked");
-      expect(conway.execCalls.length).toBe(0);
-    });
   }
 
   it("install_npm_package allows clean package names", async () => {
@@ -567,5 +557,13 @@ describe("package install inline validation", () => {
     const tool = tools.find((t) => t.name === "install_npm_package")!;
     await tool.execute({ package: "@conway/automaton" }, ctx);
     expect(conway.execCalls.length).toBe(1);
+  });
+
+  it("does not expose MCP or skill management tools to autonomous calls", () => {
+    const names = tools.map((tool) => tool.name);
+    expect(names).not.toContain("install_mcp_server");
+    expect(names).not.toContain("install_skill");
+    expect(names).not.toContain("create_skill");
+    expect(names).not.toContain("remove_skill");
   });
 });

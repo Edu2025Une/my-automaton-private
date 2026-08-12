@@ -111,15 +111,6 @@ describe("command.shell_injection rule", () => {
       expect(result!.action).toBe("deny");
     });
 
-    it(`blocks '${charName}' in install_skill name arg`, () => {
-      const request = makeRequest("install_skill", {
-        name: `evil${char}skill`,
-        url: "https://example.com/skill.md",
-      }, "skills", "caution");
-      const result = injectionRule.evaluate(request);
-      expect(result).not.toBeNull();
-      expect(result!.action).toBe("deny");
-    });
   }
 
   it("allows clean commit hash in pull_upstream", () => {
@@ -321,35 +312,6 @@ describe("Validation rules", () => {
     });
   });
 
-  describe("validate.skill_name", () => {
-    const rule = rules.find((r) => r.id === "validate.skill_name")!;
-
-    it("allows valid skill names", () => {
-      const validNames = ["my-skill", "skill123", "MySkill"];
-      for (const name of validNames) {
-        const request = makeRequest("install_skill", { name }, "skills");
-        const result = rule.evaluate(request);
-        expect(result).toBeNull();
-      }
-    });
-
-    it("rejects skill names with special characters", () => {
-      const invalidNames = [
-        "../etc/passwd",
-        "skill; rm -rf /",
-        "skill name",
-        "skill/path",
-        "skill.dot",
-      ];
-      for (const name of invalidNames) {
-        const request = makeRequest("install_skill", { name }, "skills");
-        const result = rule.evaluate(request);
-        expect(result).not.toBeNull();
-        expect(result!.action).toBe("deny");
-      }
-    });
-  });
-
   describe("validate.git_hash", () => {
     const rule = rules.find((r) => r.id === "validate.git_hash")!;
 
@@ -433,36 +395,6 @@ describe("Validation rules", () => {
     });
   });
 
-  describe("validate.address_format", () => {
-    const rule = rules.find((r) => r.id === "validate.address_format")!;
-
-    it("allows valid Ethereum addresses", () => {
-      const valid = [
-        "0x1234567890abcdef1234567890abcdef12345678",
-        "0xABCDEF1234567890ABCDEF1234567890ABCDEF12",
-      ];
-      for (const to_address of valid) {
-        const request = makeRequest("local_transfer", { to_address }, "treasury");
-        const result = rule.evaluate(request);
-        expect(result).toBeNull();
-      }
-    });
-
-    it("rejects invalid addresses", () => {
-      const invalid = [
-        "not-an-address",
-        "0x1234",     // too short
-        "1234567890abcdef1234567890abcdef12345678", // no 0x prefix
-        "0xGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG", // non-hex
-      ];
-      for (const to_address of invalid) {
-        const request = makeRequest("local_transfer", { to_address }, "treasury");
-        const result = rule.evaluate(request);
-        expect(result).not.toBeNull();
-        expect(result!.action).toBe("deny");
-      }
-    });
-  });
 });
 
 // ─── Default Rules Integration ─────────────────────────────────────
@@ -473,23 +405,11 @@ describe("createDefaultRules integration", () => {
   it("returns all validation and command safety rules", () => {
     const ruleIds = rules.map((r) => r.id);
     expect(ruleIds).toContain("validate.package_name");
-    expect(ruleIds).toContain("validate.skill_name");
     expect(ruleIds).toContain("validate.git_hash");
     expect(ruleIds).toContain("validate.port_range");
     expect(ruleIds).toContain("validate.cron_expression");
-    expect(ruleIds).toContain("validate.address_format");
     expect(ruleIds).toContain("command.shell_injection");
     expect(ruleIds).toContain("command.forbidden_patterns");
-  });
-
-  it("blocks shell injection in install_skill name with combined rules", () => {
-    const request = makeRequest("install_skill", {
-      name: "evil;rm -rf /",
-      url: "https://example.com",
-    }, "skills");
-    const result = evaluateRules(rules, request);
-    expect(result).not.toBeNull();
-    expect(result!.action).toBe("deny");
   });
 
   it("blocks invalid git hash in pull_upstream with combined rules", () => {
@@ -505,36 +425,22 @@ describe("createDefaultRules integration", () => {
 // ─── Registry Safety Tests ─────────────────────────────────────────
 
 describe("skills/registry.ts safety", () => {
-  // These tests verify that the registry functions have input validation
-  // by importing the functions and checking they throw on invalid input.
-  // We don't actually execute shell commands — we test the validation.
-
-  it("installSkillFromGit rejects invalid skill name", async () => {
-    const { installSkillFromGit } = await import("../skills/registry.js");
-    await expect(
-      installSkillFromGit("https://github.com/test/repo", "../evil", "/tmp/skills", {} as any, {} as any),
-    ).rejects.toThrow(/Invalid skill name/);
+  it("does not export remote skill installers", async () => {
+    const registry = await import("../skills/registry.js");
+    expect((registry as any).installSkillFromGit).toBeUndefined();
+    expect((registry as any).installSkillFromUrl).toBeUndefined();
   });
 
-  it("installSkillFromGit rejects URL with shell metacharacters", async () => {
-    const { installSkillFromGit } = await import("../skills/registry.js");
-    await expect(
-      installSkillFromGit("https://evil.com/repo; rm -rf /", "test-skill", "/tmp/skills", {} as any, {} as any),
-    ).rejects.toThrow(/Invalid repo URL/);
-  });
-
-  it("installSkillFromUrl rejects invalid skill name", async () => {
-    const { installSkillFromUrl } = await import("../skills/registry.js");
-    await expect(
-      installSkillFromUrl("https://example.com/skill.md", "evil;name", "/tmp/skills", {} as any, {} as any),
-    ).rejects.toThrow(/Invalid skill name/);
-  });
-
-  it("installSkillFromUrl rejects URL with shell metacharacters", async () => {
-    const { installSkillFromUrl } = await import("../skills/registry.js");
-    await expect(
-      installSkillFromUrl("https://evil.com/skill.md | cat /etc/passwd", "test-skill", "/tmp/skills", {} as any, {} as any),
-    ).rejects.toThrow(/Invalid URL/);
+  it("contains no remote download or clone execution path", async () => {
+    const fs = await import("fs");
+    const source = fs.readFileSync(
+      new URL("../skills/registry.ts", import.meta.url).pathname.replace("/src/__tests__/../", "/src/"),
+      "utf-8",
+    );
+    expect(source).not.toMatch(/git\s+clone/);
+    expect(source).not.toMatch(/\bcurl\b/);
+    expect(source).not.toMatch(/\bwget\b/);
+    expect(source).not.toMatch(/fetch\s*\(/);
   });
 
   it("createSkill rejects invalid skill name", async () => {
@@ -567,16 +473,15 @@ describe("Source code injection safety", () => {
     expect(source).toMatch(/execFileSync\s*\(\s*"git"/);
   });
 
-  it("registry.ts uses execFileSync not conway.exec with interpolation", async () => {
+  it("registry.ts does not execute remote skill install commands", async () => {
     const fs = await import("fs");
     const source = fs.readFileSync(
       new URL("../skills/registry.ts", import.meta.url).pathname.replace("/src/__tests__/../", "/src/"),
       "utf-8",
     );
-    // Should NOT have template literals in conway.exec calls
-    expect(source).not.toMatch(/conway\.exec\s*\(\s*`/);
-    // Should use execFileSync or fs.* instead
-    expect(source).toMatch(/execFileSync\s*\(/);
+    expect(source).not.toMatch(/conway\.exec/);
+    expect(source).not.toMatch(/execFileSync\s*\(/);
+    expect(source).not.toMatch(/\bfetch\s*\(/);
     expect(source).toMatch(/fs\.mkdirSync\(/);
     expect(source).toMatch(/fs\.rmSync\(/);
   });

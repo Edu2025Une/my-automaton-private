@@ -1,146 +1,166 @@
 /**
- * Skills Registry
+ * Local Skills Registry
  *
- * Install skills from remote sources:
- * - Git repos: git clone <url> ~/.automaton/skills/<name>
- * - URLs: fetch a SKILL.md from any URL
- * - Self-created: the automaton writes its own SKILL.md files
- *
- * All shell commands use execFileSync with argument arrays to prevent injection.
- * Directory operations use fs.* to avoid shell interpolation entirely.
+ * Skills are operator-managed local files. This module only creates, lists,
+ * and disables local skill records; it never downloads or clones skill code.
  */
 
-import { execFileSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import * as yaml from "yaml";
 import type {
   Skill,
-  SkillSource,
   AutomatonDatabase,
   ConwayClient,
 } from "../types.js";
-import { parseSkillMd } from "./format.js";
 
-// Validation patterns to prevent injection via path/URL arguments
 const SKILL_NAME_RE = /^[a-zA-Z0-9-]+$/;
-const SAFE_URL_RE = /^https?:\/\/[^\s;|&$`(){}<>]+$/;
-
-// Size limits for skill content
 const MAX_DESCRIPTION_LENGTH = 500;
 const MAX_INSTRUCTIONS_LENGTH = 10_000;
+const BLOCKED_CONWAY_PATTERNS = [
+  /\bConway-Research\b/i,
+  /\bConway Cloud\b/i,
+  /\bconway\.tech\b/i,
+  /\bconway-cloud\b/i,
+] as const;
 
-/**
- * Validate that a skill path does not escape the skills directory.
- * Prevents path traversal attacks via crafted skill names.
- */
-function validateSkillPath(skillsDir: string, name: string): string {
-  const resolved = path.resolve(skillsDir, name);
-  if (!resolved.startsWith(path.resolve(skillsDir) + path.sep)) {
-    throw new Error(`Skill path traversal detected: ${name}`);
-  }
-  return resolved;
-}
-
-/**
- * Install a skill from a git repository.
- * Clones the repo into ~/.automaton/skills/<name>/
- * Uses execFileSync with argument arrays to prevent shell injection.
- */
-export async function installSkillFromGit(
-  repoUrl: string,
-  name: string,
-  skillsDir: string,
-  db: AutomatonDatabase,
-  _conway: ConwayClient,
-): Promise<Skill | null> {
-  // Validate inputs to prevent injection
+export function assertValidSkillName(name: string): void {
   if (!SKILL_NAME_RE.test(name)) {
     throw new Error(`Invalid skill name: "${name}". Must match ${SKILL_NAME_RE.source}`);
   }
-  if (!SAFE_URL_RE.test(repoUrl)) {
-    throw new Error(`Invalid repo URL: "${repoUrl}". Must be an http(s) URL with no shell metacharacters.`);
+}
+
+export function validateLocalSkillContent(content: string, skillFilePath: string): void {
+  for (const pattern of BLOCKED_CONWAY_PATTERNS) {
+    if (pattern.test(content)) {
+      throw new Error(`Skill file contains blocked operational Conway reference: ${skillFilePath}`);
+    }
+  }
+}
+
+export function resolveHome(p: string): string {
+  if (p.startsWith("~")) {
+    return path.join(process.env.HOME || "/root", p.slice(1));
+  }
+  return p;
+}
+
+function assertNoLink(stats: fs.Stats, label: string): void {
+  if (stats.isSymbolicLink()) {
+    throw new Error(`Skill path must not be a symlink or junction: ${label}`);
+  }
+}
+
+function assertInside(rootReal: string, targetReal: string, label: string): void {
+  const relative = path.relative(rootReal, targetReal);
+  if (relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))) {
+    return;
+  }
+  throw new Error(`Skill path escapes skills directory: ${label}`);
+}
+
+function existingAncestors(targetPath: string): string[] {
+  const ancestors: string[] = [];
+  let current = path.resolve(targetPath);
+  while (!fs.existsSync(current)) {
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
   }
 
-  const resolvedDir = resolveHome(skillsDir);
-  const targetDir = validateSkillPath(resolvedDir, name);
+  while (true) {
+    ancestors.unshift(current);
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  return ancestors;
+}
 
-  // Clone using execFileSync with argument array (no shell interpolation)
-  try {
-    execFileSync("git", ["clone", "--depth", "1", repoUrl, targetDir], {
-      encoding: "utf-8",
-      timeout: 60_000,
-    });
-  } catch (err: any) {
-    throw new Error(`Failed to clone skill repo: ${err.message}`);
+function assertNoLinkAncestors(targetPath: string): void {
+  for (const ancestor of existingAncestors(targetPath)) {
+    assertNoLink(fs.lstatSync(ancestor), ancestor);
+  }
+}
+
+export function resolveSkillsRoot(skillsDir: string, options: { create?: boolean } = {}): string | null {
+  const resolved = path.resolve(resolveHome(skillsDir));
+
+  if (!fs.existsSync(resolved)) {
+    if (!options.create) return null;
+    assertNoLinkAncestors(resolved);
+    fs.mkdirSync(resolved, { recursive: true, mode: 0o700 });
   }
 
-  // Read SKILL.md using fs (no shell needed)
-  const skillMdPath = path.join(targetDir, "SKILL.md");
+  const stats = fs.lstatSync(resolved);
+  assertNoLink(stats, resolved);
+  if (!stats.isDirectory()) {
+    throw new Error(`Skills root is not a directory: ${resolved}`);
+  }
+  return fs.realpathSync(resolved);
+}
+
+export function resolveSkillDirectory(
+  skillsDir: string,
+  name: string,
+  options: { create?: boolean; mustExist?: boolean } = {},
+): string {
+  assertValidSkillName(name);
+
+  const rootReal = resolveSkillsRoot(skillsDir, { create: options.create });
+  if (!rootReal) {
+    throw new Error(`Skills root does not exist: ${resolveHome(skillsDir)}`);
+  }
+
+  const targetPath = path.join(rootReal, name);
+  assertInside(rootReal, path.resolve(targetPath), name);
+
+  if (!fs.existsSync(targetPath)) {
+    if (options.mustExist) {
+      throw new Error(`Skill directory not found: ${name}`);
+    }
+    if (options.create) {
+      assertNoLinkAncestors(targetPath);
+      fs.mkdirSync(targetPath, { recursive: true, mode: 0o700 });
+    }
+  }
+
+  const targetStats = fs.lstatSync(targetPath);
+  assertNoLink(targetStats, targetPath);
+  if (!targetStats.isDirectory()) {
+    throw new Error(`Skill path is not a directory: ${name}`);
+  }
+
+  const targetReal = fs.realpathSync(targetPath);
+  assertInside(rootReal, targetReal, name);
+  return targetReal;
+}
+
+export function resolveSkillMdPath(skillsDir: string, name: string): string {
+  const targetReal = resolveSkillDirectory(skillsDir, name, { mustExist: true });
+  const skillMdPath = path.join(targetReal, "SKILL.md");
+
   if (!fs.existsSync(skillMdPath)) {
-    throw new Error(`No SKILL.md found in cloned repo at ${skillMdPath}`);
+    throw new Error(`SKILL.md not found for skill: ${name}`);
   }
 
-  const content = fs.readFileSync(skillMdPath, "utf-8");
-  const skill = parseSkillMd(content, skillMdPath, "git");
-  if (!skill) {
-    throw new Error("Failed to parse SKILL.md from cloned repo");
+  const stats = fs.lstatSync(skillMdPath);
+  assertNoLink(stats, skillMdPath);
+  if (!stats.isFile()) {
+    throw new Error(`SKILL.md is not a regular file for skill: ${name}`);
   }
 
-  db.upsertSkill(skill);
-  return skill;
+  const rootReal = resolveSkillsRoot(skillsDir);
+  if (!rootReal) {
+    throw new Error(`Skills root does not exist: ${resolveHome(skillsDir)}`);
+  }
+  assertInside(rootReal, fs.realpathSync(skillMdPath), skillMdPath);
+  return skillMdPath;
 }
 
 /**
- * Install a skill from a URL (fetches a single SKILL.md).
- * Uses execFileSync with argument arrays and fs.* for safe operations.
- */
-export async function installSkillFromUrl(
-  url: string,
-  name: string,
-  skillsDir: string,
-  db: AutomatonDatabase,
-  _conway: ConwayClient,
-): Promise<Skill | null> {
-  // Validate inputs to prevent injection
-  if (!SKILL_NAME_RE.test(name)) {
-    throw new Error(`Invalid skill name: "${name}". Must match ${SKILL_NAME_RE.source}`);
-  }
-  if (!SAFE_URL_RE.test(url)) {
-    throw new Error(`Invalid URL: "${url}". Must be an http(s) URL with no shell metacharacters.`);
-  }
-
-  const resolvedDir = resolveHome(skillsDir);
-  const targetDir = validateSkillPath(resolvedDir, name);
-  const skillMdPath = path.join(targetDir, "SKILL.md");
-
-  // Create directory using fs (no shell needed)
-  fs.mkdirSync(targetDir, { recursive: true });
-
-  // Fetch SKILL.md using execFileSync with argument array (no shell interpolation)
-  try {
-    execFileSync("curl", ["-fsSL", "-o", skillMdPath, url], {
-      encoding: "utf-8",
-      timeout: 30_000,
-    });
-  } catch (err: any) {
-    throw new Error(`Failed to fetch SKILL.md from URL: ${err.message}`);
-  }
-
-  // Read content using fs (no shell needed)
-  const content = fs.readFileSync(skillMdPath, "utf-8");
-  const skill = parseSkillMd(content, skillMdPath, "url");
-  if (!skill) {
-    throw new Error("Failed to parse fetched SKILL.md");
-  }
-
-  db.upsertSkill(skill);
-  return skill;
-}
-
-/**
- * Create a new skill authored by the automaton itself.
- * Uses fs.* for directory creation and file writing (no shell needed).
+ * Create a local skill file in a disabled state. This function is intended for
+ * operator-controlled flows, not autonomous agent tool calls.
  */
 export async function createSkill(
   name: string,
@@ -148,52 +168,45 @@ export async function createSkill(
   instructions: string,
   skillsDir: string,
   db: AutomatonDatabase,
-  conway: ConwayClient,
+  _conway: ConwayClient,
 ): Promise<Skill> {
-  // Validate name to prevent path traversal/injection
-  if (!SKILL_NAME_RE.test(name)) {
-    throw new Error(`Invalid skill name: "${name}". Must match ${SKILL_NAME_RE.source}`);
-  }
+  assertValidSkillName(name);
 
-  // Enforce size limits
   const safeDescription = description.slice(0, MAX_DESCRIPTION_LENGTH);
   const safeInstructions = instructions.slice(0, MAX_INSTRUCTIONS_LENGTH);
 
-  const resolvedDir = resolveHome(skillsDir);
-  const targetDir = validateSkillPath(resolvedDir, name);
+  const targetDir = resolveSkillDirectory(skillsDir, name, { create: true });
+  const skillMdPath = path.join(targetDir, "SKILL.md");
+  if (fs.existsSync(skillMdPath)) {
+    assertNoLink(fs.lstatSync(skillMdPath), skillMdPath);
+  }
 
-  // Create directory using fs (no shell needed)
-  fs.mkdirSync(targetDir, { recursive: true });
-
-  // Generate YAML frontmatter safely using yaml.stringify (prevents YAML injection)
   const frontmatter = yaml.stringify({
     name,
     description: safeDescription,
-    "auto-activate": true,
+    "auto-activate": false,
   });
   const content = `---\n${frontmatter}---\n\n${safeInstructions}`;
-
-  const skillMdPath = path.join(targetDir, "SKILL.md");
-  await conway.writeFile(skillMdPath, content);
+  validateLocalSkillContent(content, skillMdPath);
+  fs.writeFileSync(skillMdPath, content, { mode: 0o600 });
 
   const skill: Skill = {
     name,
     description: safeDescription,
-    autoActivate: true,
+    autoActivate: false,
     instructions: safeInstructions,
     source: "self",
     path: skillMdPath,
-    enabled: true,
+    enabled: false,
     installedAt: new Date().toISOString(),
   };
 
-  db.upsertSkill(skill);
+  db.upsertSkill({ ...skill, instructions: "" });
   return skill;
 }
 
 /**
- * Remove a skill (disable in DB and optionally delete from disk).
- * Uses fs.rmSync for safe file deletion (no shell needed).
+ * Disable a skill and optionally delete its validated local directory.
  */
 export async function removeSkill(
   name: string,
@@ -202,30 +215,15 @@ export async function removeSkill(
   skillsDir: string,
   deleteFiles: boolean = false,
 ): Promise<void> {
-  // Validate name to prevent path traversal/injection
-  if (!SKILL_NAME_RE.test(name)) {
-    throw new Error(`Invalid skill name: "${name}". Must match ${SKILL_NAME_RE.source}`);
-  }
-
+  assertValidSkillName(name);
   db.removeSkill(name);
 
-  if (deleteFiles) {
-    const resolvedDir = resolveHome(skillsDir);
-    const targetDir = validateSkillPath(resolvedDir, name);
-    fs.rmSync(targetDir, { recursive: true, force: true });
-  }
+  if (!deleteFiles) return;
+
+  const targetDir = resolveSkillDirectory(skillsDir, name, { mustExist: true });
+  fs.rmSync(targetDir, { recursive: true, force: true });
 }
 
-/**
- * List all installed skills.
- */
 export function listSkills(db: AutomatonDatabase): Skill[] {
   return db.getSkills();
-}
-
-function resolveHome(p: string): string {
-  if (p.startsWith("~")) {
-    return path.join(process.env.HOME || "/root", p.slice(1));
-  }
-  return p;
 }

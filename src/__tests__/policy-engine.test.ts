@@ -569,7 +569,6 @@ describe("Tool risk classifications", () => {
     const tools = createBuiltinTools("test-sandbox-id");
     const expectedDangerous = [
       "edit_own_file", "pull_upstream", "install_npm_package",
-      "install_mcp_server", "install_skill", "create_skill", "remove_skill",
       "register_domain",
       "update_genesis_prompt",
       "distress_signal",
@@ -579,6 +578,15 @@ describe("Tool risk classifications", () => {
       expect(tool, `Tool ${name} not found`).toBeDefined();
       expect(tool!.riskLevel, `Tool ${name} should be dangerous`).toBe("dangerous");
     }
+  });
+
+  it("does not expose autonomous skill or MCP installers", () => {
+    const tools = createBuiltinTools("test-sandbox-id");
+    const names = tools.map((tool) => tool.name);
+    expect(names).not.toContain("install_mcp_server");
+    expect(names).not.toContain("install_skill");
+    expect(names).not.toContain("create_skill");
+    expect(names).not.toContain("remove_skill");
   });
 });
 

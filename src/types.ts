@@ -668,7 +668,7 @@ export interface SkillRequirements {
   env?: string[];
 }
 
-export type SkillSource = "builtin" | "git" | "url" | "self";
+export type SkillSource = "builtin" | "local" | "self";
 
 export interface SkillFrontmatter {
   name: string;
