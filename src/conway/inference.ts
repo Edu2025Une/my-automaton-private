@@ -13,7 +13,7 @@ import type {
   TokenUsage,
   InferenceToolDefinition,
 } from "../types.js";
-import { ResilientHttpClient } from "./http-client.js";
+import { ResilientHttpClient } from "../infrastructure/http/resilient-http-client.js";
 import { STANDALONE_PROVIDER_ERROR } from "../standalone.js";
 import type { OpenRouterConfig } from "../inference/provider-config.js";
 import {

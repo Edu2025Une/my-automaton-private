@@ -5,7 +5,7 @@ import {
   buildOpenRouterProviderPayload,
 } from "../provider-config.js";
 import { chatViaOpenAiCompatible } from "./openai-compatible.js";
-import { ResilientHttpClient } from "../../conway/http-client.js";
+import { ResilientHttpClient } from "../../infrastructure/http/resilient-http-client.js";
 
 export interface OpenRouterChatParams {
   body: Record<string, unknown>;

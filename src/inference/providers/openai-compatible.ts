@@ -4,7 +4,7 @@ import type {
   InferenceToolCall,
   TokenUsage,
 } from "../../types.js";
-import { ResilientHttpClient } from "../../conway/http-client.js";
+import { ResilientHttpClient } from "../../infrastructure/http/resilient-http-client.js";
 
 export interface OpenAiCompatibleChatParams {
   model: string;

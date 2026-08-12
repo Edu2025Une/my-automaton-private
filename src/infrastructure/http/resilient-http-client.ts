@@ -1,14 +1,10 @@
 /**
- * Resilient HTTP Client
- *
- * Shared HTTP client with timeouts, retries, jittered exponential backoff,
- * and circuit breaker for all outbound Conway API calls.
- *
- * Phase 1.3: Network Resilience (P1-8, P1-9)
+ * Shared HTTP client with secure URL checks, timeouts, retries,
+ * jittered exponential backoff, and a circuit breaker.
  */
 
-import type { HttpClientConfig } from "../types.js";
-import { DEFAULT_HTTP_CLIENT_CONFIG } from "../types.js";
+import type { HttpClientConfig } from "../../types.js";
+import { DEFAULT_HTTP_CLIENT_CONFIG } from "../../types.js";
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
@@ -92,9 +88,8 @@ export class ResilientHttpClient {
         });
         clearTimeout(timer);
 
-        // Count retryable HTTP errors toward circuit breaker, regardless of
-        // whether we will actually retry. A server consistently returning 502
-        // should eventually trip the circuit breaker.
+        // Count retryable HTTP errors toward the circuit breaker, regardless of
+        // whether this specific request still has retries left.
         if (this.config.retryableStatuses.includes(response.status)) {
           this.consecutiveFailures++;
           if (this.consecutiveFailures >= this.config.circuitBreakerThreshold) {
@@ -107,7 +102,6 @@ export class ResilientHttpClient {
           return response;
         }
 
-        // Only reset failure counter on truly successful responses
         this.consecutiveFailures = 0;
         return response;
       } catch (error) {

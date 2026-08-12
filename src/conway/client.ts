@@ -22,7 +22,7 @@ import type {
   DnsRecord,
   ModelInfo,
 } from "../types.js";
-import { ResilientHttpClient } from "./http-client.js";
+import { ResilientHttpClient } from "../infrastructure/http/resilient-http-client.js";
 import { ulid } from "ulid";
 import { keccak256, toHex } from "viem";
 import type { Address, PrivateKeyAccount } from "viem";

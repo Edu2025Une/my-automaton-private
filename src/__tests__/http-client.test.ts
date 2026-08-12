@@ -1,15 +1,15 @@
 /**
- * Tests for ResilientHttpClient — Phase 1.3 Network Resilience
+ * Tests for ResilientHttpClient.
  *
  * Covers: timeouts, retries, backoff, circuit breaker, idempotency keys,
- * cached balance fallback, api_unreachable state handling.
+ * secure URL checks, and timer cleanup.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
-  ResilientHttpClient,
   CircuitOpenError,
-} from "../conway/http-client.js";
+  ResilientHttpClient,
+} from "../infrastructure/http/resilient-http-client.js";
 
 // ─── Mock fetch ────────────────────────────────────────────────
 
