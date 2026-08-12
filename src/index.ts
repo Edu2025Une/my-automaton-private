@@ -261,8 +261,6 @@ async function run(): Promise<void> {
     logger.info(`[${new Date().toISOString()}] Ollama backend: ${ollamaBaseUrl}`);
   }
 
-  const social = undefined;
-
   // Initialize PolicyEngine + SpendTracker (Phase 1.4)
   const treasuryPolicy = config.treasuryPolicy ?? DEFAULT_TREASURY_POLICY;
   const rules = createDefaultRules(treasuryPolicy);
@@ -317,7 +315,6 @@ async function run(): Promise<void> {
         db,
         conway,
         inference,
-        social,
         skills,
         policyEngine,
         spendTracker,

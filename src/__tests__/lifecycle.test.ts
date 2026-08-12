@@ -24,13 +24,11 @@ import { pruneDeadChildren } from "../replication/lineage.js";
 import {
   VALID_TRANSITIONS,
   DEFAULT_CHILD_HEALTH_CONFIG,
-  MESSAGE_LIMITS,
 } from "../types.js";
 import type { ChildLifecycleState, ConwayClient, ExecResult } from "../types.js";
 import { MIGRATION_V7 } from "../state/schema.js";
 import {
   MockConwayClient,
-  MockSocialClient,
   createTestIdentity,
   createTestConfig,
 } from "./mocks.js";
@@ -694,30 +692,12 @@ describe("Genesis Validation", () => {
 // ─── Messaging ──────────────────────────────────────────────────
 
 describe("Messaging", () => {
-  let social: MockSocialClient;
-
-  beforeEach(() => {
-    social = new MockSocialClient();
-  });
-
-  it("sendToChild sends via social relay", async () => {
-    const result = await sendToChild(social, "0xchild", "hello child");
-    expect(result.id).toBeDefined();
-    expect(social.sentMessages.length).toBe(1);
-    expect(social.sentMessages[0].to).toBe("0xchild");
-  });
-
-  it("sendToParent sends via social relay", async () => {
-    const result = await sendToParent(social, "0xparent", "hello parent");
-    expect(result.id).toBeDefined();
-    expect(social.sentMessages.length).toBe(1);
-    expect(social.sentMessages[0].to).toBe("0xparent");
-  });
-
-  it("rejects messages exceeding size limit", async () => {
-    const bigContent = "x".repeat(MESSAGE_LIMITS.maxContentLength + 1);
-    await expect(sendToChild(social, "0xchild", bigContent)).rejects.toThrow(
-      "Message too long",
+  it("fails explicitly because remote messaging was removed with the social relay", async () => {
+    await expect(sendToChild("0xchild", "hello child")).rejects.toThrow(
+      "Parent-child remote messaging is unavailable in standalone runtime.",
+    );
+    await expect(sendToParent("0xparent", "hello parent")).rejects.toThrow(
+      "Parent-child remote messaging is unavailable in standalone runtime.",
     );
   });
 });

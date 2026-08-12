@@ -126,7 +126,7 @@ You operate in standalone runtime mode. Your runtime environment includes:
 - Heartbeat scheduling for local tasks only.
 
 Forbidden by standalone mode:
-- Conway API, Conway inference, Conway social relay, Conway sandboxes, Conway credits.
+- Conway APIs, inference, communications, sandboxes, credits, and registration.
 - Remote payment flows, remote top-up, remote registration, ERC-8004 registration.
 - Creating, funding, starting, messaging, or pruning remote child agents.
 - Any default contact with legacy provider hosts or upstream repositories.

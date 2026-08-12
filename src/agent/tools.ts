@@ -54,7 +54,6 @@ function confinePathToSandbox(filePath: string): string | { error: string } {
 const EXTERNAL_SOURCE_TOOLS = new Set([
   "exec",
   "web_fetch",
-  "check_social_inbox",
 ]);
 
 // ─── Self-Preservation Guard ───────────────────────────────────
@@ -127,7 +126,6 @@ export const REMOVED_STANDALONE_TOOL_NAMES = new Set([
   "message_child",
   "verify_child_constitution",
   "prune_dead_children",
-  "send_message",
   "list_models",
   "switch_model",
 ]);
@@ -1653,7 +1651,7 @@ Model: ${ctx.inference.getDefaultModel()}
     {
       name: "message_child",
       description:
-        "Send a signed message to a child automaton via social relay.",
+        "Remote child messaging is unavailable in standalone runtime.",
       category: "replication",
       riskLevel: "caution",
       parameters: {
@@ -1669,21 +1667,10 @@ Model: ${ctx.inference.getDefaultModel()}
         required: ["child_id", "content"],
       },
       execute: async (args, ctx) => {
-        if (!ctx.social) {
-          return "Social relay not configured. Set socialRelayUrl in config.";
-        }
-
         const child = ctx.db.getChildById(args.child_id as string);
         if (!child) return `Child ${args.child_id} not found.`;
 
-        const { sendToChild } = await import("../replication/messaging.js");
-        const result = await sendToChild(
-          ctx.social,
-          child.address,
-          args.content as string,
-          (args.type as string) || "parent_message",
-        );
-        return `Message sent to child ${child.name} (id: ${result.id})`;
+        return `Remote child messaging is unavailable in standalone runtime for child ${child.name}.`;
       },
     },
     {
@@ -1741,52 +1728,6 @@ Model: ${ctx.inference.getDefaultModel()}
           (args.keep_last as number) || 5,
         );
         return `Pruned ${pruned} dead children.`;
-      },
-    },
-
-    // === Phase 3.2: Social & Registry Tools ===
-
-    // ── Social / Messaging Tools ──
-    {
-      name: "send_message",
-      description:
-        "Send a signed message to another automaton or address via the social relay.",
-      category: "conway",
-      riskLevel: "caution",
-      parameters: {
-        type: "object",
-        properties: {
-          to_address: {
-            type: "string",
-            description: "Recipient wallet address (0x...)",
-          },
-          content: {
-            type: "string",
-            description: "Message content to send",
-          },
-          reply_to: {
-            type: "string",
-            description: "Optional message ID to reply to",
-          },
-        },
-        required: ["to_address", "content"],
-      },
-      execute: async (args, ctx) => {
-        if (!ctx.social) {
-          return "Social relay not configured. Set socialRelayUrl in config.";
-        }
-        // Phase 3.2: Enforce MESSAGE_LIMITS size check
-        const content = args.content as string;
-        const { MESSAGE_LIMITS } = await import("../types.js");
-        if (content.length > MESSAGE_LIMITS.maxContentLength) {
-          return `Blocked: Message content too long (${content.length} > ${MESSAGE_LIMITS.maxContentLength} bytes)`;
-        }
-        const result = await ctx.social.send(
-          args.to_address as string,
-          content,
-          args.reply_to as string | undefined,
-        );
-        return `Message sent (id: ${result.id})`;
       },
     },
 

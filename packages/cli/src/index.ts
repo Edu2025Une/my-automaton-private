@@ -17,9 +17,6 @@ async function main(): Promise<void> {
     case "logs":
       await import("./commands/logs.js");
       break;
-    case "send":
-      await import("./commands/send.js");
-      break;
     default:
       console.log(`
 Conway Automaton CLI - Creator Tools
@@ -27,7 +24,6 @@ Conway Automaton CLI - Creator Tools
 Usage:
   automaton-cli status              Show automaton status
   automaton-cli logs [--tail N]     View automaton logs
-  automaton-cli send <to-address> <message> Send a social message
 `);
   }
 }

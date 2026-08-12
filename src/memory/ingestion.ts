@@ -679,27 +679,6 @@ export class MemoryIngestionPipeline {
     toolCallResults: ToolCallResult[],
   ): void {
     try {
-      // Track outbound message interactions
-      for (const tc of toolCallResults) {
-        if (tc.error) continue;
-
-        if (tc.name === "send_message") {
-          const toAddress = tc.arguments.to_address as string | undefined;
-          if (toAddress) {
-            const existing = this.relationships.get(toAddress);
-            if (existing) {
-              this.relationships.recordInteraction(toAddress);
-            } else {
-              this.relationships.record({
-                entityAddress: toAddress,
-                relationshipType: "contacted",
-                trustScore: 0.5,
-              });
-            }
-          }
-        }
-      }
-
       // Track inbox message sources (once per turn, not per tool call)
       if (turn.inputSource === "agent" && turn.input) {
         const fromMatch = turn.input.match(/\[Message from (0x[a-fA-F0-9]+)\]/);

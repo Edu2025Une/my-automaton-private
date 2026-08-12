@@ -1,7 +1,7 @@
 /**
  * Heartbeat Tests
  *
- * Tests for heartbeat tasks, especially the social inbox checker.
+ * Tests for heartbeat tasks.
  * Phase 1.1: Updated to pass TickContext + HeartbeatLegacyContext.
  */
 
@@ -9,12 +9,11 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { BUILTIN_TASKS } from "../heartbeat/tasks.js";
 import {
   MockConwayClient,
-  MockSocialClient,
   createTestDb,
   createTestIdentity,
   createTestConfig,
 } from "./mocks.js";
-import type { AutomatonDatabase, InboxMessage, TickContext, HeartbeatLegacyContext } from "../types.js";
+import type { AutomatonDatabase, TickContext, HeartbeatLegacyContext } from "../types.js";
 
 function createMockTickContext(db: AutomatonDatabase, overrides?: Partial<TickContext>): TickContext {
   return {
@@ -47,170 +46,9 @@ describe("Heartbeat Tasks", () => {
     db.close();
   });
 
-  describe("check_social_inbox", () => {
-    it("returns shouldWake false when no social client", async () => {
-      const tickCtx = createMockTickContext(db);
-      const taskCtx: HeartbeatLegacyContext = {
-        identity: createTestIdentity(),
-        config: createTestConfig(),
-        db,
-        conway,
-        // no social client
-      };
-
-      const result = await BUILTIN_TASKS.check_social_inbox(tickCtx, taskCtx);
-
-      expect(result.shouldWake).toBe(false);
-    });
-
-    it("polls and wakes when messages found", async () => {
-      const social = new MockSocialClient();
-      social.pollResponses.push({
-        messages: [
-          {
-            id: "msg-1",
-            from: "0xsender1",
-            to: "0xrecipient",
-            content: "Hey there!",
-            signedAt: new Date().toISOString(),
-            createdAt: new Date().toISOString(),
-          },
-          {
-            id: "msg-2",
-            from: "0xsender2",
-            to: "0xrecipient",
-            content: "What's up?",
-            signedAt: new Date().toISOString(),
-            createdAt: new Date().toISOString(),
-          },
-        ],
-        nextCursor: new Date().toISOString(),
-      });
-
-      const tickCtx = createMockTickContext(db);
-      const taskCtx: HeartbeatLegacyContext = {
-        identity: createTestIdentity(),
-        config: createTestConfig(),
-        db,
-        conway,
-        social,
-      };
-
-      const result = await BUILTIN_TASKS.check_social_inbox(tickCtx, taskCtx);
-
-      expect(result.shouldWake).toBe(true);
-      expect(result.message).toContain("2 new message(s)");
-
-      // Verify messages were persisted to inbox
-      const unprocessed = db.getUnprocessedInboxMessages(10);
-      expect(unprocessed.length).toBe(2);
-    });
-
-    it("deduplicates messages", async () => {
-      const social = new MockSocialClient();
-
-      // First poll: returns msg-1
-      social.pollResponses.push({
-        messages: [
-          {
-            id: "msg-1",
-            from: "0xsender1",
-            to: "0xrecipient",
-            content: "Hello!",
-            signedAt: new Date().toISOString(),
-            createdAt: new Date().toISOString(),
-          },
-        ],
-      });
-
-      // Second poll: returns same msg-1 again
-      social.pollResponses.push({
-        messages: [
-          {
-            id: "msg-1",
-            from: "0xsender1",
-            to: "0xrecipient",
-            content: "Hello!",
-            signedAt: new Date().toISOString(),
-            createdAt: new Date().toISOString(),
-          },
-        ],
-      });
-
-      const tickCtx = createMockTickContext(db);
-      const taskCtx: HeartbeatLegacyContext = {
-        identity: createTestIdentity(),
-        config: createTestConfig(),
-        db,
-        conway,
-        social,
-      };
-
-      // First run
-      const result1 = await BUILTIN_TASKS.check_social_inbox(tickCtx, taskCtx);
-      expect(result1.shouldWake).toBe(true);
-
-      // Second run — same message, should not wake
-      const result2 = await BUILTIN_TASKS.check_social_inbox(tickCtx, taskCtx);
-      expect(result2.shouldWake).toBe(false);
-
-      // Only one inbox row
-      const unprocessed = db.getUnprocessedInboxMessages(10);
-      expect(unprocessed.length).toBe(1);
-    });
-
-    it("returns shouldWake false when no messages", async () => {
-      const social = new MockSocialClient();
-      social.pollResponses.push({ messages: [] });
-
-      const tickCtx = createMockTickContext(db);
-      const taskCtx: HeartbeatLegacyContext = {
-        identity: createTestIdentity(),
-        config: createTestConfig(),
-        db,
-        conway,
-        social,
-      };
-
-      const result = await BUILTIN_TASKS.check_social_inbox(tickCtx, taskCtx);
-
-      expect(result.shouldWake).toBe(false);
-    });
-
-    it("does not wake when all messages are blocked by sanitizer", async () => {
-      const social = new MockSocialClient();
-      // Message exceeding 50KB triggers the size_limit block
-      const oversizedContent = "x".repeat(60_000);
-      social.pollResponses.push({
-        messages: [
-          {
-            id: "blocked-msg-1",
-            from: "0xattacker",
-            to: "0xrecipient",
-            content: oversizedContent,
-            signedAt: new Date().toISOString(),
-            createdAt: new Date().toISOString(),
-          },
-        ],
-      });
-
-      const tickCtx = createMockTickContext(db);
-      const taskCtx: HeartbeatLegacyContext = {
-        identity: createTestIdentity(),
-        config: createTestConfig(),
-        db,
-        conway,
-        social,
-      };
-
-      const result = await BUILTIN_TASKS.check_social_inbox(tickCtx, taskCtx);
-
-      // Blocked messages are stored for audit but should not wake the agent
-      expect(result.shouldWake).toBe(false);
-      // Message was still persisted
-      const unprocessed = db.getUnprocessedInboxMessages(10);
-      expect(unprocessed.length).toBe(1);
-      expect(unprocessed[0].content).toContain("[BLOCKED:");
+  describe("removed social relay polling", () => {
+    it("does not register check_social_inbox as a heartbeat task", () => {
+      expect(BUILTIN_TASKS.check_social_inbox).toBeUndefined();
     });
   });
 

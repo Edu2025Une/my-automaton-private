@@ -10,7 +10,6 @@ declare module "@conway/automaton/config.js" {
     conwayApiKey: string;
     openaiApiKey?: string;
     anthropicApiKey?: string;
-    socialRelayUrl?: string;
   }
 
   export function loadConfig(): AutomatonCliConfig | null;

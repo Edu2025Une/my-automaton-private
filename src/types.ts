@@ -67,7 +67,6 @@ export interface AutomatonConfig {
   /** Child sandbox memory config (MB), default 1024 */
   childSandboxMemoryMb?: number;
   parentAddress?: string;
-  socialRelayUrl?: string;
   treasuryPolicy?: TreasuryPolicy;
   // Phase 2 config additions
   soulConfig?: SoulConfig;
@@ -95,7 +94,6 @@ export const DEFAULT_CONFIG: Partial<AutomatonConfig> = {
   maxChildren: 3,
   maxTurnsPerCycle: 25,
   childSandboxMemoryMb: 1024,
-  socialRelayUrl: undefined,
 };
 
 // ─── Agent State ─────────────────────────────────────────────────
@@ -175,13 +173,6 @@ export interface ToolContext {
   db: AutomatonDatabase;
   conway: ConwayClient;
   inference: InferenceClient;
-  social?: SocialClientInterface;
-}
-
-export interface SocialClientInterface {
-  send(to: string, content: string, replyTo?: string): Promise<{ id: string }>;
-  poll(cursor?: string, limit?: number): Promise<{ messages: InboxMessage[]; nextCursor?: string }>;
-  unreadCount(): Promise<number>;
 }
 
 export interface InboxMessage {
@@ -878,7 +869,6 @@ export interface HeartbeatLegacyContext {
   config: AutomatonConfig;
   db: AutomatonDatabase;
   conway: ConwayClient;
-  social?: SocialClientInterface;
 }
 
 export interface HeartbeatScheduleRow {
@@ -1312,38 +1302,7 @@ export const DEFAULT_GENESIS_LIMITS: GenesisLimits = {
   maxGenesisPromptLength: 16000,
 };
 
-export interface ParentChildMessage {
-  id: string;
-  from: string;
-  to: string;
-  content: string;
-  type: string;
-  sentAt: string;
-}
-
-export const MESSAGE_LIMITS = {
-  maxContentLength: 64_000, // 64KB
-  maxTotalSize: 128_000, // 128KB
-  replayWindowMs: 300_000, // 5 minutes
-  maxOutboundPerHour: 100,
-} as const;
-
 // === Phase 3.2: Social & Registry Types ===
-
-export interface SignedMessagePayload {
-  from: string;
-  to: string;
-  content: string;
-  signed_at: string;
-  signature: string;
-  reply_to?: string;
-}
-
-export interface MessageValidationResult {
-  valid: boolean;
-  errors: string[];
-}
-
 export interface DiscoveryConfig {
   ipfsGateway: string; // default: "https://ipfs.io"
   maxScanCount: number; // default: 100

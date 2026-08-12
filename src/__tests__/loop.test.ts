@@ -10,7 +10,6 @@ import { Orchestrator } from "../orchestration/orchestrator.js";
 import {
   MockInferenceClient,
   MockConwayClient,
-  MockSocialClient,
   createTestDb,
   createTestIdentity,
   createTestConfig,
@@ -675,7 +674,7 @@ describe("Agent Loop", () => {
       execResponse("r3"), // Warning fires, loopWarningPattern = "exec"
       // Turn 4: different tool — resets loopWarningPattern
       toolCallResponse([
-        { name: "send_message", arguments: { to: "0x123", content: "hello" } },
+        { name: "read_file", arguments: { path: "/tmp/nonexistent-loop-reset" } },
       ]),
       execResponse("r5"),
       execResponse("r6"),

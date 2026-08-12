@@ -76,8 +76,6 @@ const PRODUCTIVE_TOOLS = new Set([
 ]);
 
 const COMMUNICATION_TOOLS = new Set([
-  "send_message",
-  "check_social_inbox",
   "give_feedback",
   "note_about_agent",
 ]);

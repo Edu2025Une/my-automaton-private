@@ -67,7 +67,6 @@ describe("Tool Risk Level Classification", () => {
     git_branch: "caution",
     git_clone: "caution",
     update_agent_card: "caution",
-    send_message: "caution",
     switch_model: "caution",
     start_child: "caution",
     message_child: "caution",

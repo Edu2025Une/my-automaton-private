@@ -41,15 +41,16 @@ export function hadLegacyConwayMode(config?: Partial<AutomatonConfig> | null): b
 }
 
 export function disableConwayRuntimeFields<T extends Partial<AutomatonConfig>>(config: T): T {
+  const { socialRelayUrl: _legacySocialRelayUrl, ...rest } =
+    config as T & { socialRelayUrl?: unknown };
   return {
-    ...config,
+    ...rest,
     runtimeMode: "standalone",
     registeredWithConway: false,
     sandboxId: "",
     conwayApiUrl: "",
     conwayApiKey: "",
-    socialRelayUrl: undefined,
-  };
+  } as T;
 }
 
 export function getIndependentInferenceProvider(
@@ -99,7 +100,6 @@ export function getStandaloneBootstrapExternalUrls(
 ): string[] {
   const candidates = [
     config.conwayApiUrl,
-    config.socialRelayUrl,
   ];
   return candidates.filter((value): value is string => containsConwayUrl(value));
 }

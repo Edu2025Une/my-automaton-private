@@ -20,8 +20,6 @@ import type {
   AutomatonDatabase,
   AutomatonIdentity,
   AutomatonConfig,
-  SocialClientInterface,
-  InboxMessage,
 } from "../types.js";
 import { DEFAULT_CONFIG } from "../types.js";
 import path from "path";
@@ -206,33 +204,6 @@ export class MockConwayClient implements ConwayClient {
   }
 }
 
-// ─── Mock Social Client ─────────────────────────────────────────
-
-export class MockSocialClient implements SocialClientInterface {
-  sentMessages: { to: string; content: string; replyTo?: string }[] = [];
-  pollResponses: { messages: InboxMessage[]; nextCursor?: string }[] = [];
-  private pollIndex = 0;
-  unread = 0;
-
-  async send(to: string, content: string, replyTo?: string): Promise<{ id: string }> {
-    this.sentMessages.push({ to, content, replyTo });
-    return { id: `msg_${Date.now()}` };
-  }
-
-  async poll(
-    cursor?: string,
-    limit?: number,
-  ): Promise<{ messages: InboxMessage[]; nextCursor?: string }> {
-    const response = this.pollResponses[this.pollIndex];
-    this.pollIndex++;
-    return response ?? { messages: [] };
-  }
-
-  async unreadCount(): Promise<number> {
-    return this.unread;
-  }
-}
-
 // ─── Mock Metrics Collector ──────────────────────────────────────
 
 export class MockMetricsCollector {
@@ -332,7 +303,6 @@ export function createTestConfig(
     skillsDir: "/tmp/test-skills",
     maxChildren: 3,
     maxTurnsPerCycle: 25,
-    socialRelayUrl: undefined,
     ...overrides,
   };
 }

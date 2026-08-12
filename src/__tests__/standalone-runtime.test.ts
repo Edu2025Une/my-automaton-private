@@ -36,7 +36,7 @@ describe("standalone runtime mode", () => {
     expect(config.sandboxId).toBe("");
     expect(config.conwayApiUrl).toBe("");
     expect(config.conwayApiKey).toBe("");
-    expect(config.socialRelayUrl).toBeUndefined();
+    expect((config as any).socialRelayUrl).toBeUndefined();
   });
 
   it("creates standalone config without Conway credentials or default Conway URLs", () => {
@@ -51,7 +51,7 @@ describe("standalone runtime mode", () => {
     expect(config.conwayApiKey).toBe("");
     expect(config.conwayApiUrl).toBe("");
     expect(config.sandboxId).toBe("");
-    expect(config.socialRelayUrl).toBeUndefined();
+    expect((config as any).socialRelayUrl).toBeUndefined();
     expect(getStandaloneBootstrapExternalUrls(config)).toEqual([]);
   });
 
@@ -125,10 +125,24 @@ describe("standalone runtime mode", () => {
       "topup_credits",
       "transfer_credits",
       "x402_fetch",
+      "send_message",
+      "check_social_inbox",
     ]) {
       const result = await executeTool(removedName, {}, tools, context);
       expect(result.error).toBe(`Unknown tool: ${removedName}`);
     }
+  });
+
+  it("does not schedule or expose the removed social relay task", () => {
+    const tasksSource = fs.readFileSync(new URL("../heartbeat/tasks.ts", import.meta.url), "utf-8");
+    const configSource = fs.readFileSync(new URL("../heartbeat/config.ts", import.meta.url), "utf-8");
+    const tools = createBuiltinTools("");
+    const toolNames = new Set(tools.map((tool) => tool.name));
+
+    expect(tasksSource).not.toContain("check_social_inbox");
+    expect(configSource).not.toContain("check_social_inbox");
+    expect(toolNames.has("send_message")).toBe(false);
+    expect(toolNames.has("check_social_inbox")).toBe(false);
   });
 
   it("removes the provision command from the CLI entrypoint", () => {
@@ -147,6 +161,8 @@ describe("standalone runtime mode", () => {
       "../setup/defaults.ts",
       "../agent/loop.ts",
       "../conway/inference.ts",
+      "../heartbeat/tasks.ts",
+      "../heartbeat/config.ts",
     ];
     const forbidden = [
       "conway.tech",

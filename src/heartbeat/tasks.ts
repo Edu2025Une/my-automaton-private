@@ -15,7 +15,6 @@ import type {
   SurvivalTier,
 } from "../types.js";
 import type { HealthMonitor as ColonyHealthMonitor } from "../orchestration/health-monitor.js";
-import { sanitizeInput } from "../agent/injection-defense.js";
 import { getSurvivalTier } from "../survival/tiers.js";
 import { createLogger } from "../observability/logger.js";
 import { getMetrics } from "../observability/metrics.js";
@@ -86,82 +85,6 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
     }
 
     return { shouldWake: false };
-  },
-
-
-  check_social_inbox: async (_ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
-    if (!taskCtx.social) return { shouldWake: false };
-
-    // If we've recently encountered an error polling the inbox, back off.
-    const backoffUntil = taskCtx.db.getKV("social_inbox_backoff_until");
-    if (backoffUntil && new Date(backoffUntil) > new Date()) {
-      return { shouldWake: false };
-    }
-
-    const cursor = taskCtx.db.getKV("social_inbox_cursor") || undefined;
-
-    let messages: any[] = [];
-    let nextCursor: string | undefined;
-
-    try {
-      const result = await taskCtx.social.poll(cursor);
-      messages = result.messages;
-      nextCursor = result.nextCursor;
-
-      // Clear previous error/backoff on success.
-      taskCtx.db.deleteKV("last_social_inbox_error");
-      taskCtx.db.deleteKV("social_inbox_backoff_until");
-    } catch (err: any) {
-      taskCtx.db.setKV(
-        "last_social_inbox_error",
-        JSON.stringify({
-          message: err?.message || String(err),
-          stack: err?.stack,
-          timestamp: new Date().toISOString(),
-        }),
-      );
-      // 5-minute backoff to avoid spamming errors on transient network failures.
-      taskCtx.db.setKV(
-        "social_inbox_backoff_until",
-        new Date(Date.now() + 300_000).toISOString(),
-      );
-      return { shouldWake: false };
-    }
-
-    if (nextCursor) taskCtx.db.setKV("social_inbox_cursor", nextCursor);
-
-    if (!messages || messages.length === 0) return { shouldWake: false };
-
-    // Persist to inbox_messages table for deduplication
-    // Sanitize content before DB insertion
-    let newCount = 0;
-    for (const msg of messages) {
-      const existing = taskCtx.db.getKV(`inbox_seen_${msg.id}`);
-      if (!existing) {
-        const sanitizedFrom = sanitizeInput(msg.from, msg.from, "social_address");
-        const sanitizedContent = sanitizeInput(msg.content, msg.from, "social_message");
-        const sanitizedMsg = {
-          ...msg,
-          from: sanitizedFrom.content,
-          content: sanitizedContent.content,
-        };
-        taskCtx.db.insertInboxMessage(sanitizedMsg);
-        taskCtx.db.setKV(`inbox_seen_${msg.id}`, "1");
-        // Only count non-blocked messages toward wake threshold —
-        // blocked messages are stored for audit but should not wake
-        // the agent (prevents injection spam from draining credits).
-        if (!sanitizedContent.blocked) {
-          newCount++;
-        }
-      }
-    }
-
-    if (newCount === 0) return { shouldWake: false };
-
-    return {
-      shouldWake: true,
-      message: `${newCount} new message(s) from: ${messages.map((m) => m.from.slice(0, 10)).join(", ")}`,
-    };
   },
 
   check_for_updates: async (_ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {

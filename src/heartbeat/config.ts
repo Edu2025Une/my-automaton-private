@@ -33,12 +33,6 @@ const DEFAULT_HEARTBEAT_CONFIG: HeartbeatConfig = {
       task: "health_check",
       enabled: true,
     },
-    {
-      name: "check_social_inbox",
-      schedule: "*/2 * * * *",
-      task: "check_social_inbox",
-      enabled: true,
-    },
   ],
   defaultIntervalMs: 60_000,
   lowComputeMultiplier: 4,

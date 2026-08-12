@@ -673,24 +673,6 @@ describe("MemoryIngestionPipeline", () => {
     expect(balance!.value).toContain("$5.00");
   });
 
-  it("should update relationship memory from send_message", () => {
-    const turn = makeTurn({
-      toolCalls: [
-        makeToolCallResult({
-          name: "send_message",
-          arguments: { to_address: "0xABCD" },
-          result: "Message sent",
-        }),
-      ],
-    });
-    pipeline.ingest("s1", turn, turn.toolCalls);
-
-    const rm = new RelationshipMemoryManager(db);
-    const rel = rm.get("0xABCD");
-    expect(rel).toBeTruthy();
-    expect(rel!.relationshipType).toBe("contacted");
-  });
-
   it("should not throw on errors in pipeline stages", () => {
     // Create a turn that might cause issues
     const turn = makeTurn({
@@ -755,7 +737,7 @@ describe("classifyTurn", () => {
 
   it("should classify communication turns", () => {
     const result = classifyTurn(
-      [makeToolCallResult({ name: "send_message" })],
+      [makeToolCallResult({ name: "note_about_agent" })],
       "",
     );
     expect(result).toBe("communication");

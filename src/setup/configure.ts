@@ -200,7 +200,6 @@ async function configureProviders(config: AutomatonConfig): Promise<void> {
   config.conwayApiUrl = "";
   config.sandboxId = "";
   config.registeredWithConway = false;
-  config.socialRelayUrl = undefined;
 
   config.openaiApiKey = await askString("OpenAI API key  (sk-...)", config.openaiApiKey) || undefined;
   config.anthropicApiKey = await askString("Anthropic API key  (sk-ant-...)", config.anthropicApiKey) || undefined;
@@ -299,7 +298,6 @@ async function configureGeneral(config: AutomatonConfig): Promise<void> {
     ["debug", "info", "warn", "error"] as const,
     config.logLevel,
   );
-  config.socialRelayUrl = undefined;
   config.rpcUrl = (await askString("RPC endpoint  (Base chain, e.g. https://mainnet.base.org)", config.rpcUrl)) || undefined;
 
   console.log("");

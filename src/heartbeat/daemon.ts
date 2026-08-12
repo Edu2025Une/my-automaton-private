@@ -19,7 +19,6 @@ import type {
   HeartbeatConfig,
   HeartbeatTaskFn,
   HeartbeatLegacyContext,
-  SocialClientInterface,
 } from "../types.js";
 import { BUILTIN_TASKS } from "./tasks.js";
 import { DurableScheduler } from "./scheduler.js";
@@ -38,7 +37,6 @@ export interface HeartbeatDaemonOptions {
   db: AutomatonDatabase;
   rawDb: DatabaseType;
   conway: ConwayClient;
-  social?: SocialClientInterface;
   onWakeRequest?: (reason: string) => void;
 }
 
@@ -58,7 +56,7 @@ export interface HeartbeatDaemon {
 export function createHeartbeatDaemon(
   options: HeartbeatDaemonOptions,
 ): HeartbeatDaemon {
-  const { identity, config, heartbeatConfig, db, rawDb, conway, social, onWakeRequest } = options;
+  const { identity, config, heartbeatConfig, db, rawDb, conway, onWakeRequest } = options;
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   let running = false;
 
@@ -67,7 +65,6 @@ export function createHeartbeatDaemon(
     config,
     db,
     conway,
-    social,
   };
 
   // Build task map from BUILTIN_TASKS

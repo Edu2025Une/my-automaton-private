@@ -13,11 +13,9 @@ import { isSensitiveFile } from "../policy-rules/path-protection.js";
 const MAX_EXEC_TIMEOUT_MS = 30_000;
 const MAX_READ_SIZE = 10_000;
 const MAX_EXEC_OUTPUT = 16_000;
-const MAX_SOCIAL_MESSAGES = 20;
 const GENERAL_WRAPPED_TOOL_ALLOWLIST = new Set([
   "expose_port",
   "remove_port",
-  "send_message",
   "list_models",
   "switch_model",
   "check_inference_spending",
@@ -193,55 +191,6 @@ When calling task_done, provide:
               return `read error: ${error instanceof Error ? error.message : String(error)}`;
             }
           }
-        },
-      },
-      {
-        name: "check_social_inbox",
-        description: "Check for incoming social messages.",
-        parameters: {
-          type: "object",
-          properties: {
-            cursor: { type: "string", description: "Optional inbox cursor to resume from" },
-            limit: { type: "number", description: "Maximum messages to fetch (default: 10, max: 20)" },
-          },
-        },
-        execute: async (args) => {
-          const social = this.context.toolContext?.social;
-          if (!social) {
-            return "Error: social inbox unavailable because no social client is configured.";
-          }
-
-          const requestedLimit = typeof args.limit === "number" ? args.limit : 10;
-          const limit = Math.max(1, Math.min(Math.floor(requestedLimit), MAX_SOCIAL_MESSAGES));
-          const cursor = typeof args.cursor === "string"
-            ? args.cursor
-            : this.context.toolContext?.db.getKV("social_inbox_cursor") || undefined;
-
-          const unreadCount = await social.unreadCount();
-          const { messages, nextCursor } = await social.poll(cursor, limit);
-          if (nextCursor) {
-            this.context.toolContext?.db.setKV("social_inbox_cursor", nextCursor);
-          }
-
-          if (messages.length === 0) {
-            return unreadCount > 0
-              ? `No inbox messages returned in this poll. ${unreadCount} unread message(s) reported.`
-              : "No incoming messages.";
-          }
-
-          return sanitizeToolResult(JSON.stringify({
-            unreadCount,
-            nextCursor,
-            messages: messages.map((message) => ({
-              id: message.id,
-              from: message.from,
-              to: message.to,
-              content: message.content,
-              signedAt: message.signedAt,
-              createdAt: message.createdAt,
-              replyTo: message.replyTo,
-            })),
-          }, null, 2));
         },
       },
       {
