@@ -13,6 +13,10 @@ import type {
   SandboxInfo,
   CreditTransferResult,
 } from "./types.js";
+import {
+  resolveExplicitStandaloneProvider,
+  resolveOpenRouterConfig,
+} from "./inference/provider-config.js";
 
 const LEGACY_PROVIDER_DOMAIN = ["conway", "tech"].join(".");
 
@@ -24,7 +28,7 @@ export const CONWAY_HOST_PATTERNS = [
 ] as const;
 
 export const STANDALONE_PROVIDER_ERROR =
-  "Standalone runtime requires an independent inference provider. Configure OPENAI_API_KEY, ANTHROPIC_API_KEY, or OLLAMA_BASE_URL.";
+  "Standalone runtime requires an independent inference provider. Configure OPENAI_API_KEY, ANTHROPIC_API_KEY, OLLAMA_BASE_URL, or INFERENCE_PROVIDER=openrouter with OPENROUTER_API_KEY and exactly one of OPENROUTER_MODEL or OPENROUTER_PRESET.";
 
 export function getRuntimeMode(config?: Partial<AutomatonConfig> | null): RuntimeMode {
   return "standalone";
@@ -53,7 +57,24 @@ export function disableConwayRuntimeFields<T extends Partial<AutomatonConfig>>(c
 export function getIndependentInferenceProvider(
   config: Partial<AutomatonConfig>,
   env: NodeJS.ProcessEnv = process.env,
-): "openai" | "anthropic" | "ollama" | null {
+): "openai" | "anthropic" | "ollama" | "openrouter" | null {
+  const explicit = resolveExplicitStandaloneProvider(env);
+  if (explicit === "openrouter") {
+    resolveOpenRouterConfig(env);
+    return "openrouter";
+  }
+  if (explicit === "openai") {
+    if (!env.OPENAI_API_KEY && !config.openaiApiKey) throw new Error(STANDALONE_PROVIDER_ERROR);
+    return "openai";
+  }
+  if (explicit === "anthropic") {
+    if (!env.ANTHROPIC_API_KEY && !config.anthropicApiKey) throw new Error(STANDALONE_PROVIDER_ERROR);
+    return "anthropic";
+  }
+  if (explicit === "ollama") {
+    if (!env.OLLAMA_BASE_URL && !config.ollamaBaseUrl) throw new Error(STANDALONE_PROVIDER_ERROR);
+    return "ollama";
+  }
   if (env.OPENAI_API_KEY || config.openaiApiKey) return "openai";
   if (env.ANTHROPIC_API_KEY || config.anthropicApiKey) return "anthropic";
   if (env.OLLAMA_BASE_URL || config.ollamaBaseUrl) return "ollama";

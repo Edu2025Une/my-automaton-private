@@ -30,6 +30,10 @@ import {
   createStandaloneConwayClient,
   STANDALONE_PROVIDER_ERROR,
 } from "./standalone.js";
+import {
+  resolveExplicitStandaloneProvider,
+  resolveOpenRouterConfig,
+} from "./inference/provider-config.js";
 
 const logger = createLogger("main");
 const VERSION = "0.2.1";
@@ -63,6 +67,10 @@ Environment:
   OPENAI_API_KEY           OpenAI API key for standalone inference
   ANTHROPIC_API_KEY        Anthropic API key for standalone inference
   OLLAMA_BASE_URL          Ollama base URL (overrides config, e.g. http://localhost:11434)
+  INFERENCE_PROVIDER       Optional explicit provider: openai, anthropic, ollama, openrouter
+  OPENROUTER_API_KEY       OpenRouter API key when INFERENCE_PROVIDER=openrouter
+  OPENROUTER_MODEL         OpenRouter model; mutually exclusive with OPENROUTER_PRESET
+  OPENROUTER_PRESET        OpenRouter preset in @preset/<slug> format
 `);
     process.exit(0);
   }
@@ -227,6 +235,10 @@ async function run(): Promise<void> {
   const openaiApiKey = config.openaiApiKey || process.env.OPENAI_API_KEY;
   const anthropicApiKey = config.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
   const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || config.ollamaBaseUrl;
+  const explicitProvider = resolveExplicitStandaloneProvider(process.env);
+  const openRouter = explicitProvider === "openrouter"
+    ? resolveOpenRouterConfig(process.env)
+    : undefined;
 
   // Create inference client — pass a live registry lookup so model names like
   // "gpt-oss:120b" route to Ollama based on their registered provider, not heuristics.
@@ -239,10 +251,13 @@ async function run(): Promise<void> {
     openaiApiKey,
     anthropicApiKey,
     ollamaBaseUrl,
+    openRouter,
     getModelProvider: (modelId) => modelRegistry.get(modelId)?.provider,
   });
 
-  if (ollamaBaseUrl) {
+  if (openRouter) {
+    logger.info(`[${new Date().toISOString()}] Inference provider: openrouter`);
+  } else if (ollamaBaseUrl) {
     logger.info(`[${new Date().toISOString()}] Ollama backend: ${ollamaBaseUrl}`);
   }
 

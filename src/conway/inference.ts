@@ -15,6 +15,12 @@ import type {
 } from "../types.js";
 import { ResilientHttpClient } from "./http-client.js";
 import { STANDALONE_PROVIDER_ERROR } from "../standalone.js";
+import type { OpenRouterConfig } from "../inference/provider-config.js";
+import {
+  chatViaOpenAiCompatible,
+  formatOpenAiCompatibleMessage,
+} from "../inference/providers/openai-compatible.js";
+import { chatViaOpenRouter } from "../inference/providers/openrouter.js";
 
 const INFERENCE_TIMEOUT_MS = 60_000;
 
@@ -25,11 +31,12 @@ interface InferenceClientOptions {
   openaiApiKey?: string;
   anthropicApiKey?: string;
   ollamaBaseUrl?: string;
+  openRouter?: OpenRouterConfig;
   /** Optional registry lookup — if provided, used before name heuristics */
   getModelProvider?: (modelId: string) => string | undefined;
 }
 
-type InferenceBackend = "openai" | "anthropic" | "ollama";
+type InferenceBackend = "openai" | "anthropic" | "ollama" | "openrouter";
 
 function isLoopbackHttpUrl(url: string | undefined): boolean {
   if (!url) return false;
@@ -43,6 +50,11 @@ function isLoopbackHttpUrl(url: string | undefined): boolean {
   }
 }
 
+function normalizeOllamaOpenAiBaseUrl(url: string): string {
+  const trimmed = url.replace(/\/+$/, "");
+  return trimmed.endsWith("/v1") ? trimmed : `${trimmed}/v1`;
+}
+
 export function createInferenceClient(
   options: InferenceClientOptions,
 ): InferenceClient {
@@ -50,6 +62,7 @@ export function createInferenceClient(
     openaiApiKey,
     anthropicApiKey,
     ollamaBaseUrl,
+    openRouter,
     getModelProvider,
   } = options;
   const httpClient = new ResilientHttpClient({
@@ -67,23 +80,24 @@ export function createInferenceClient(
     const model = opts?.model || currentModel;
     const tools = opts?.tools;
 
-    const backend = resolveInferenceBackend(model, {
-      openaiApiKey,
-      anthropicApiKey,
-      ollamaBaseUrl,
-      getModelProvider,
-    });
+    const backend = openRouter ? "openrouter" : resolveInferenceBackend(model, {
+        openaiApiKey,
+        anthropicApiKey,
+        ollamaBaseUrl,
+        getModelProvider,
+      });
+    const requestModel = openRouter ? openRouter.model : model;
 
     // Newer models (o-series, gpt-5.x, gpt-4.1) require max_completion_tokens.
     // Ollama always uses max_tokens.
     const usesCompletionTokens =
-      backend !== "ollama" && /^(o[1-9]|gpt-5|gpt-4\.1)/.test(model);
+      backend !== "ollama" && /^(o[1-9]|gpt-5|gpt-4\.1)/.test(requestModel);
     const tokenLimit = opts?.maxTokens || maxTokens;
 
     const body: Record<string, unknown> = {
-      model,
-      messages: messages.map(formatMessage),
-      stream: false,
+      model: requestModel,
+      messages: messages.map(formatOpenAiCompatibleMessage),
+      stream: Boolean(opts?.stream),
     };
 
     if (usesCompletionTokens) {
@@ -103,7 +117,7 @@ export function createInferenceClient(
 
     if (backend === "anthropic") {
       return chatViaAnthropic({
-        model,
+        model: requestModel,
         tokenLimit,
         messages,
         tools,
@@ -113,20 +127,30 @@ export function createInferenceClient(
       });
     }
 
+    if (backend === "openrouter") {
+      return chatViaOpenRouter({
+        body,
+        config: openRouter as OpenRouterConfig,
+        httpClient,
+        timeoutMs: INFERENCE_TIMEOUT_MS,
+      });
+    }
+
     const openAiLikeApiUrl =
-      backend === "openai" ? "https://api.openai.com" :
-      (ollamaBaseUrl as string).replace(/\/$/, "");
+      backend === "openai" ? "https://api.openai.com/v1" :
+      normalizeOllamaOpenAiBaseUrl(ollamaBaseUrl as string);
     const openAiLikeApiKey =
       backend === "openai" ? (openaiApiKey as string) :
       "ollama";
 
     return chatViaOpenAiCompatible({
-      model,
+      model: requestModel,
       body,
       apiUrl: openAiLikeApiUrl,
       apiKey: openAiLikeApiKey,
       backend,
       httpClient,
+      timeoutMs: INFERENCE_TIMEOUT_MS,
     });
   };
 
@@ -153,21 +177,6 @@ export function createInferenceClient(
     setLowComputeMode,
     getDefaultModel,
   };
-}
-
-function formatMessage(
-  msg: ChatMessage,
-): Record<string, unknown> {
-  const formatted: Record<string, unknown> = {
-    role: msg.role,
-    content: msg.content,
-  };
-
-  if (msg.name) formatted.name = msg.name;
-  if (msg.tool_calls) formatted.tool_calls = msg.tool_calls;
-  if (msg.tool_call_id) formatted.tool_call_id = msg.tool_call_id;
-
-  return formatted;
 }
 
 /**
@@ -200,70 +209,6 @@ function resolveInferenceBackend(
   if (keys.openaiApiKey) return "openai";
   if (keys.anthropicApiKey) return "anthropic";
   throw new Error(STANDALONE_PROVIDER_ERROR);
-}
-
-async function chatViaOpenAiCompatible(params: {
-  model: string;
-  body: Record<string, unknown>;
-  apiUrl: string;
-  apiKey: string;
-  backend: "openai" | "ollama";
-  httpClient: ResilientHttpClient;
-}): Promise<InferenceResponse> {
-  const resp = await params.httpClient.request(`${params.apiUrl}/v1/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization:
-        `Bearer ${params.apiKey}`,
-    },
-    body: JSON.stringify(params.body),
-    timeout: INFERENCE_TIMEOUT_MS,
-  });
-
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(
-      `Inference error (${params.backend}): ${resp.status}: ${text}`,
-    );
-  }
-
-  const data = await resp.json() as any;
-  const choice = data.choices?.[0];
-
-  if (!choice) {
-    throw new Error("No completion choice returned from inference");
-  }
-
-  const message = choice.message;
-  const usage: TokenUsage = {
-    promptTokens: data.usage?.prompt_tokens || 0,
-    completionTokens: data.usage?.completion_tokens || 0,
-    totalTokens: data.usage?.total_tokens || 0,
-  };
-
-  const toolCalls: InferenceToolCall[] | undefined =
-    message.tool_calls?.map((tc: any) => ({
-      id: tc.id,
-      type: "function" as const,
-      function: {
-        name: tc.function.name,
-        arguments: tc.function.arguments,
-      },
-    }));
-
-  return {
-    id: data.id || "",
-    model: data.model || params.model,
-    message: {
-      role: message.role,
-      content: message.content || "",
-      tool_calls: toolCalls,
-    },
-    toolCalls,
-    usage,
-    finishReason: choice.finish_reason || "stop",
-  };
 }
 
 async function chatViaAnthropic(params: {
