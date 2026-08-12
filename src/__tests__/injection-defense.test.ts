@@ -297,7 +297,7 @@ describe("tool_result mode", () => {
 describe("skill_instruction mode", () => {
   it("strips tool call syntax", () => {
     const result = sanitizeInput(
-      '{"name": "transfer_credits", "arguments": {"amount": 1000}}',
+      '{"name": "exec", "arguments": {"command": "echo test"}}',
       "skill",
       "skill_instruction"
     );

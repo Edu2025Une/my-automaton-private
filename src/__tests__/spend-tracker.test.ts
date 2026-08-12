@@ -33,7 +33,7 @@ function createTestSpendDb(): Database.Database {
       amount_cents INTEGER NOT NULL,
       recipient TEXT,
       domain TEXT,
-      category TEXT NOT NULL CHECK(category IN ('transfer','x402','inference','other')),
+      category TEXT NOT NULL CHECK(category IN ('transfer','inference','other')),
       window_hour TEXT NOT NULL,
       window_day TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -61,7 +61,7 @@ describe("SpendTracker", () => {
   describe("recordSpend", () => {
     it("inserts a record with correct window_hour and window_day", () => {
       tracker.recordSpend({
-        toolName: "transfer_credits",
+        toolName: "local_transfer",
         amountCents: 500,
         recipient: "0x1234",
         category: "transfer",
@@ -71,7 +71,7 @@ describe("SpendTracker", () => {
         .prepare("SELECT * FROM spend_tracking LIMIT 1")
         .get() as any;
       expect(row).toBeDefined();
-      expect(row.tool_name).toBe("transfer_credits");
+      expect(row.tool_name).toBe("local_transfer");
       expect(row.amount_cents).toBe(500);
       expect(row.recipient).toBe("0x1234");
       expect(row.category).toBe("transfer");
@@ -84,20 +84,20 @@ describe("SpendTracker", () => {
 
     it("inserts multiple records", () => {
       tracker.recordSpend({
-        toolName: "transfer_credits",
+        toolName: "local_transfer",
         amountCents: 100,
         category: "transfer",
       });
       tracker.recordSpend({
-        toolName: "transfer_credits",
+        toolName: "local_transfer",
         amountCents: 200,
         category: "transfer",
       });
       tracker.recordSpend({
-        toolName: "x402_fetch",
+        toolName: "web_fetch",
         amountCents: 50,
-        domain: "conway.tech",
-        category: "x402",
+        domain: "example.com",
+        category: "other",
       });
 
       const count = db
@@ -110,12 +110,12 @@ describe("SpendTracker", () => {
   describe("getHourlySpend", () => {
     it("returns sum for current hour", () => {
       tracker.recordSpend({
-        toolName: "transfer_credits",
+        toolName: "local_transfer",
         amountCents: 100,
         category: "transfer",
       });
       tracker.recordSpend({
-        toolName: "transfer_credits",
+        toolName: "local_transfer",
         amountCents: 200,
         category: "transfer",
       });
@@ -131,30 +131,30 @@ describe("SpendTracker", () => {
 
     it("separates categories", () => {
       tracker.recordSpend({
-        toolName: "transfer_credits",
+        toolName: "local_transfer",
         amountCents: 100,
         category: "transfer",
       });
       tracker.recordSpend({
-        toolName: "x402_fetch",
+        toolName: "web_fetch",
         amountCents: 50,
-        category: "x402",
+        category: "other",
       });
 
       expect(tracker.getHourlySpend("transfer")).toBe(100);
-      expect(tracker.getHourlySpend("x402")).toBe(50);
+      expect(tracker.getHourlySpend("other")).toBe(50);
     });
   });
 
   describe("getDailySpend", () => {
     it("returns sum for current day", () => {
       tracker.recordSpend({
-        toolName: "transfer_credits",
+        toolName: "local_transfer",
         amountCents: 1000,
         category: "transfer",
       });
       tracker.recordSpend({
-        toolName: "transfer_credits",
+        toolName: "local_transfer",
         amountCents: 2000,
         category: "transfer",
       });
@@ -167,7 +167,7 @@ describe("SpendTracker", () => {
   describe("getTotalSpend", () => {
     it("returns total spend since given date", () => {
       tracker.recordSpend({
-        toolName: "transfer_credits",
+        toolName: "local_transfer",
         amountCents: 500,
         category: "transfer",
       });
@@ -181,7 +181,7 @@ describe("SpendTracker", () => {
 
     it("returns 0 for future since date", () => {
       tracker.recordSpend({
-        toolName: "transfer_credits",
+        toolName: "local_transfer",
         amountCents: 500,
         category: "transfer",
       });
@@ -205,7 +205,7 @@ describe("SpendTracker", () => {
     it("returns allowed=false when hourly limit exceeded", () => {
       // Fill up hourly limit
       tracker.recordSpend({
-        toolName: "transfer_credits",
+        toolName: "local_transfer",
         amountCents: 9500,
         category: "transfer",
       });
@@ -226,7 +226,7 @@ describe("SpendTracker", () => {
       };
 
       tracker.recordSpend({
-        toolName: "transfer_credits",
+        toolName: "local_transfer",
         amountCents: 4500,
         category: "transfer",
       });
@@ -245,7 +245,7 @@ describe("SpendTracker", () => {
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         "old-record",
-        "transfer_credits",
+        "local_transfer",
         100,
         "transfer",
         "2020-01-01T00",
@@ -255,7 +255,7 @@ describe("SpendTracker", () => {
 
       // Insert a current record
       tracker.recordSpend({
-        toolName: "transfer_credits",
+        toolName: "local_transfer",
         amountCents: 200,
         category: "transfer",
       });
@@ -271,7 +271,7 @@ describe("SpendTracker", () => {
 
     it("returns 0 when no old records exist", () => {
       tracker.recordSpend({
-        toolName: "transfer_credits",
+        toolName: "local_transfer",
         amountCents: 100,
         category: "transfer",
       });
@@ -287,7 +287,7 @@ describe("SpendTracker", () => {
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         "sqlite-format-record",
-        "transfer_credits",
+        "local_transfer",
         100,
         "transfer",
         "2020-01-01T00",
@@ -326,23 +326,19 @@ describe("SpendTracker", () => {
     });
   });
 
-  describe("x402 limits", () => {
-    it("uses x402-specific limits, not transfer limits", () => {
-      // Record some x402 spend
+  describe("other local spend limits", () => {
+    it("uses inference-style limits for generic non-transfer spend", () => {
       tracker.recordSpend({
-        toolName: "x402_fetch",
+        toolName: "web_fetch",
         amountCents: 900,
-        domain: "conway.tech",
-        category: "x402",
+        domain: "example.com",
+        category: "other",
       });
 
-      // maxX402PaymentCents is 100, so hourly = 100*10 = 1000
-      // 900 + 200 = 1100 > 1000 should be denied
-      const result = tracker.checkLimit(200, "x402", DEFAULT_TREASURY_POLICY);
-      expect(result.allowed).toBe(false);
-      expect(result.reason).toContain("Hourly");
+      const result = tracker.checkLimit(200, "other", DEFAULT_TREASURY_POLICY);
+      expect(result.allowed).toBe(true);
+      expect(result.limitDaily).toBe(DEFAULT_TREASURY_POLICY.maxInferenceDailyCents);
 
-      // But the same amount should be allowed for transfers (limit is 10000)
       const transferResult = tracker.checkLimit(200, "transfer", DEFAULT_TREASURY_POLICY);
       expect(transferResult.allowed).toBe(true);
     });

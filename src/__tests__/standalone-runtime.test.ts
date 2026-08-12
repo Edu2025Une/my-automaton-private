@@ -111,20 +111,24 @@ describe("standalone runtime mode", () => {
 
   it("does not execute removed Conway tools through the standalone catalog", async () => {
     const tools = createBuiltinTools("");
-    const result = await executeTool(
-      "check_credits",
-      {},
-      tools,
-      {
-        identity: createTestIdentity(),
-        config: createTestConfig(),
-        db: {} as any,
-        conway: new MockConwayClient(),
-        inference: new MockInferenceClient(),
-      },
-    );
+    const context = {
+      identity: createTestIdentity(),
+      config: createTestConfig(),
+      db: {} as any,
+      conway: new MockConwayClient(),
+      inference: new MockInferenceClient(),
+    };
 
-    expect(result.error).toBe("Unknown tool: check_credits");
+    for (const removedName of [
+      "check_credits",
+      "check_usdc_balance",
+      "topup_credits",
+      "transfer_credits",
+      "x402_fetch",
+    ]) {
+      const result = await executeTool(removedName, {}, tools, context);
+      expect(result.error).toBe(`Unknown tool: ${removedName}`);
+    }
   });
 
   it("removes the provision command from the CLI entrypoint", () => {

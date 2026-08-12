@@ -68,7 +68,7 @@ function createRawTestDb(): Database.Database {
       amount_cents INTEGER NOT NULL,
       recipient TEXT,
       domain TEXT,
-      category TEXT NOT NULL CHECK(category IN ('transfer','x402','inference','other')),
+      category TEXT NOT NULL CHECK(category IN ('transfer','inference','other')),
       window_hour TEXT NOT NULL,
       window_day TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -616,7 +616,7 @@ describe("Financial Phase 1 Rules", () => {
       const engine = new PolicyEngine(db, rules);
 
       const tool = createMockTool({
-        name: "transfer_credits",
+        name: "local_transfer",
         riskLevel: "dangerous",
         category: "financial",
       });
@@ -632,7 +632,7 @@ describe("Financial Phase 1 Rules", () => {
       const engine = new PolicyEngine(db, rules);
 
       const tool = createMockTool({
-        name: "transfer_credits",
+        name: "local_transfer",
         riskLevel: "dangerous",
         category: "financial",
       });
@@ -656,7 +656,7 @@ describe("Financial Phase 1 Rules", () => {
       const engine = new PolicyEngine(db, rules);
 
       const tool = createMockTool({
-        name: "transfer_credits",
+        name: "local_transfer",
         riskLevel: "dangerous",
         category: "financial",
       });
@@ -678,7 +678,7 @@ describe("Treasury Config", () => {
     expect(DEFAULT_TREASURY_POLICY.maxDailyTransferCents).toBe(25000);
     expect(DEFAULT_TREASURY_POLICY.minimumReserveCents).toBe(1000);
     expect(DEFAULT_TREASURY_POLICY.maxX402PaymentCents).toBe(100);
-    expect(DEFAULT_TREASURY_POLICY.x402AllowedDomains).toEqual(["conway.tech"]);
+    expect(DEFAULT_TREASURY_POLICY.local paid fetchAllowedDomains).toEqual(["conway.tech"]);
     expect(DEFAULT_TREASURY_POLICY.transferCooldownMs).toBe(0);
     expect(DEFAULT_TREASURY_POLICY.maxTransfersPerTurn).toBe(2);
     expect(DEFAULT_TREASURY_POLICY.maxInferenceDailyCents).toBe(50000);
@@ -687,7 +687,7 @@ describe("Treasury Config", () => {
 
   it("all default values are positive", () => {
     for (const [key, value] of Object.entries(DEFAULT_TREASURY_POLICY)) {
-      if (key === "x402AllowedDomains") continue;
+      if (key === "local paid fetchAllowedDomains") continue;
       expect(typeof value).toBe("number");
       expect(value).toBeGreaterThanOrEqual(0);
     }

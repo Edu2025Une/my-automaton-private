@@ -38,7 +38,7 @@ describe("agent/LoopDetector", () => {
 
   it("flags idle-only streaks and reset clears state", () => {
     const detector = new LoopDetector({ maxIdleOnlyTurns: 3 });
-    detector.recordToolCall("check_credits", '{}');
+    detector.recordToolCall("heartbeat_ping", '{}');
     expect(detector.endTurn().reason).toBe("");
 
     detector.recordToolCall("git_status", '{}');
@@ -60,7 +60,7 @@ describe("agent/LoopDetector", () => {
     detector.recordToolCall("read_file", '{"path":"README.md"}');
     expect(detector.endTurn().reason).toBe("");
 
-    detector.recordToolCall("check_credits", '{}');
+    detector.recordToolCall("heartbeat_ping", '{}');
     expect(detector.endTurn().reason).toBe("");
 
     detector.recordToolCall("list_models", '{}');

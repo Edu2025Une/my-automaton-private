@@ -442,7 +442,7 @@ describe("Validation rules", () => {
         "0xABCDEF1234567890ABCDEF1234567890ABCDEF12",
       ];
       for (const to_address of valid) {
-        const request = makeRequest("transfer_credits", { to_address }, "treasury");
+        const request = makeRequest("local_transfer", { to_address }, "treasury");
         const result = rule.evaluate(request);
         expect(result).toBeNull();
       }
@@ -456,7 +456,7 @@ describe("Validation rules", () => {
         "0xGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG", // non-hex
       ];
       for (const to_address of invalid) {
-        const request = makeRequest("transfer_credits", { to_address }, "treasury");
+        const request = makeRequest("local_transfer", { to_address }, "treasury");
         const result = rule.evaluate(request);
         expect(result).not.toBeNull();
         expect(result!.action).toBe("deny");

@@ -497,7 +497,7 @@ describe("Agent Card", () => {
       name: "TestBot",
       description: "Test",
       services: [],
-      x402Support: true,
+      local paid fetchSupport: true,
       active: true,
     };
 

@@ -79,7 +79,7 @@ function createRawTestDb(): Database.Database {
       amount_cents INTEGER NOT NULL,
       recipient TEXT,
       domain TEXT,
-      category TEXT NOT NULL CHECK(category IN ('transfer','x402','inference','other')),
+      category TEXT NOT NULL CHECK(category IN ('transfer','inference','other')),
       window_hour TEXT NOT NULL,
       window_day TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -273,7 +273,7 @@ describe("PolicyEngine", () => {
       const engine = new PolicyEngine(db, [rule]);
 
       const financialTool = createMockTool({
-        name: "transfer_credits",
+        name: "local_transfer",
         category: "financial",
         riskLevel: "dangerous",
       });
@@ -454,7 +454,7 @@ describe("PolicyEngine", () => {
 
     it("includes correct toolName and riskLevel in decision", () => {
       const engine = new PolicyEngine(db, []);
-      const tool = createMockTool({ name: "transfer_credits", riskLevel: "dangerous" });
+      const tool = createMockTool({ name: "local_transfer", riskLevel: "dangerous" });
       const request: PolicyRequest = {
         tool,
         args: {},
@@ -467,7 +467,7 @@ describe("PolicyEngine", () => {
       };
 
       const decision = engine.evaluate(request);
-      expect(decision.toolName).toBe("transfer_credits");
+      expect(decision.toolName).toBe("local_transfer");
       expect(decision.riskLevel).toBe("dangerous");
     });
   });
@@ -552,7 +552,7 @@ describe("Tool risk classifications", () => {
   it("classifies safe tools correctly", () => {
     const tools = createBuiltinTools("test-sandbox-id");
     const expectedSafe = [
-      "read_file", "check_credits", "check_usdc_balance", "list_sandboxes",
+      "read_file", "heartbeat_ping", "system_synopsis", "list_sandboxes",
       "list_models", "system_synopsis", "list_skills", "list_children",
       "check_child_status", "git_status", "git_diff", "git_log",
       "check_reputation", "discover_agents", "heartbeat_ping",
@@ -570,7 +570,7 @@ describe("Tool risk classifications", () => {
     const expectedDangerous = [
       "edit_own_file", "pull_upstream", "install_npm_package",
       "install_mcp_server", "install_skill", "create_skill", "remove_skill",
-      "transfer_credits", "fund_child", "x402_fetch", "register_domain",
+      "register_domain",
       "spawn_child", "delete_sandbox", "update_genesis_prompt",
       "register_erc8004", "give_feedback", "distress_signal",
     ];
@@ -599,7 +599,7 @@ describe("Tool call IDs", () => {
       inference,
     };
 
-    const result = await executeTool("check_credits", {}, tools, context);
+    const result = await executeTool("heartbeat_ping", {}, tools, context);
 
     // ULID is 26 chars, base32 encoded
     expect(result.id).toHaveLength(26);
@@ -661,7 +661,7 @@ describe("executeTool with PolicyEngine", () => {
     };
 
     const result = await executeTool(
-      "check_credits",
+      "heartbeat_ping",
       {},
       tools,
       context,
@@ -690,7 +690,7 @@ describe("executeTool with PolicyEngine", () => {
     };
 
     // No policyEngine or turnContext - backward compatible
-    const result = await executeTool("check_credits", {}, tools, context);
+    const result = await executeTool("heartbeat_ping", {}, tools, context);
 
     expect(result.error).toBeUndefined();
     expect(result.result).toContain("Credit balance");
@@ -720,7 +720,7 @@ describe("executeTool with PolicyEngine", () => {
     };
 
     const result = await executeTool(
-      "check_credits",
+      "heartbeat_ping",
       {},
       tools,
       context,

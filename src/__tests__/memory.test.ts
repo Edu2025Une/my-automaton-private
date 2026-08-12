@@ -209,7 +209,7 @@ describe("EpisodicMemoryManager", () => {
 
   it("should search episodic memory by summary", () => {
     ep.record({ sessionId: "s1", eventType: "tool:exec", summary: "Deployed web app" });
-    ep.record({ sessionId: "s1", eventType: "tool:check_credits", summary: "Checked balance" });
+    ep.record({ sessionId: "s1", eventType: "tool:heartbeat_ping", summary: "Checked balance" });
 
     const results = ep.search("web app");
     expect(results).toHaveLength(1);
@@ -661,9 +661,9 @@ describe("MemoryIngestionPipeline", () => {
     expect(recent[0].eventType).toContain("tool:");
   });
 
-  it("should extract semantic facts from check_credits", () => {
+  it("should extract semantic facts from heartbeat_ping", () => {
     const turn = makeTurn({
-      toolCalls: [makeToolCallResult({ name: "check_credits", result: "Balance: $5.00 (500 cents)" })],
+      toolCalls: [makeToolCallResult({ name: "heartbeat_ping", result: "Balance: $5.00 (500 cents)" })],
     });
     pipeline.ingest("s1", turn, turn.toolCalls);
 
@@ -771,7 +771,7 @@ describe("classifyTurn", () => {
 
   it("should classify maintenance turns", () => {
     const result = classifyTurn(
-      [makeToolCallResult({ name: "check_credits" })],
+      [makeToolCallResult({ name: "heartbeat_ping" })],
       "",
     );
     expect(result).toBe("maintenance");

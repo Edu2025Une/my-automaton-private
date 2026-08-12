@@ -374,8 +374,8 @@ describe("DurableScheduler", () => {
     });
 
     it("handles API failure gracefully", async () => {
-      // Make getCreditsBalance throw
-      conway.getCreditsBalance = async () => {
+      // Make removedBalanceLookup throw
+      conway.removedBalanceLookup = async () => {
         throw new Error("API unavailable");
       };
 

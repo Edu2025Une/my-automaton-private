@@ -256,7 +256,7 @@ describe("Agent Loop", () => {
     db.setKV("last_known_balance", JSON.stringify({ creditsCents: 5000, usdcBalance: 1.0 }));
 
     // Make credits API fail
-    conway.getCreditsBalance = async () => {
+    conway.removedBalanceLookup = async () => {
       throw new Error("API down");
     };
 
@@ -443,7 +443,7 @@ describe("Agent Loop", () => {
   });
 
   it("maintenance loop detected after 3 consecutive idle-only turns", async () => {
-    // Simulate: wakeup turn with check_credits, then 2 more idle-only turns,
+    // Simulate: wakeup turn with heartbeat_ping, then 2 more idle-only turns,
     // triggering maintenance loop detection on the 3rd idle-only turn.
     // Construct responses with unique tool_call IDs to avoid DB collisions.
     function idleToolResponse(name: string, args: Record<string, unknown>, uid: string): ReturnType<typeof toolCallResponse> {
@@ -470,7 +470,7 @@ describe("Agent Loop", () => {
     }
 
     const inference = new MockInferenceClient([
-      idleToolResponse("check_credits", {}, "t1"),
+      idleToolResponse("heartbeat_ping", {}, "t1"),
       idleToolResponse("system_synopsis", {}, "t2"),
       idleToolResponse("review_memory", {}, "t3"),
       noToolResponse("I will now work on something productive."),
@@ -502,7 +502,7 @@ describe("Agent Loop", () => {
     const inference = new MockInferenceClient([
       // Turn 1 (wakeup): idle-only
       toolCallResponse([
-        { name: "check_credits", arguments: {} },
+        { name: "heartbeat_ping", arguments: {} },
       ]),
       // Turn 2: productive tool — resets idle counter
       toolCallResponse([
@@ -562,8 +562,8 @@ describe("Agent Loop", () => {
     }
 
     const inference = new MockInferenceClient([
-      idleToolResponse("check_credits", {}, "v1"),
-      idleToolResponse("check_usdc_balance", {}, "v2"),
+      idleToolResponse("heartbeat_ping", {}, "v1"),
+      idleToolResponse("system_synopsis", {}, "v2"),
       idleToolResponse("git_status", {}, "v3"),
       noToolResponse("Starting productive work now."),
     ]);

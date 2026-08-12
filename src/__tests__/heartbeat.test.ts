@@ -278,9 +278,9 @@ describe("Heartbeat Tasks", () => {
     });
   });
 
-  // ─── check_credits ──────────────────────────────────────────
+  // ─── heartbeat_ping ──────────────────────────────────────────
 
-  describe("check_credits", () => {
+  describe("heartbeat_ping", () => {
     it("does not wake when tier unchanged", async () => {
       const tickCtx = createMockTickContext(db, {
         creditBalance: 10_000,
@@ -296,7 +296,7 @@ describe("Heartbeat Tasks", () => {
       // Set previous tier to same
       db.setKV("prev_credit_tier", "normal");
 
-      const result = await BUILTIN_TASKS.check_credits(tickCtx, taskCtx);
+      const result = await BUILTIN_TASKS.heartbeat_ping(tickCtx, taskCtx);
 
       expect(result.shouldWake).toBe(false);
       const check = db.getKV("last_credit_check");
@@ -318,7 +318,7 @@ describe("Heartbeat Tasks", () => {
       // Previous tier was normal
       db.setKV("prev_credit_tier", "normal");
 
-      const result = await BUILTIN_TASKS.check_credits(tickCtx, taskCtx);
+      const result = await BUILTIN_TASKS.heartbeat_ping(tickCtx, taskCtx);
 
       expect(result.shouldWake).toBe(true);
       expect(result.message).toContain("critical");
@@ -337,15 +337,15 @@ describe("Heartbeat Tasks", () => {
       };
 
       // No previous tier set
-      const result = await BUILTIN_TASKS.check_credits(tickCtx, taskCtx);
+      const result = await BUILTIN_TASKS.heartbeat_ping(tickCtx, taskCtx);
 
       expect(result.shouldWake).toBe(false);
     });
   });
 
-  // ─── check_usdc_balance ─────────────────────────────────────
+  // ─── system_synopsis ─────────────────────────────────────
 
-  describe("check_usdc_balance", () => {
+  describe("system_synopsis", () => {
     it("does not wake when no USDC and enough credits", async () => {
       const tickCtx = createMockTickContext(db, {
         creditBalance: 10_000,
@@ -358,7 +358,7 @@ describe("Heartbeat Tasks", () => {
         conway,
       };
 
-      const result = await BUILTIN_TASKS.check_usdc_balance(tickCtx, taskCtx);
+      const result = await BUILTIN_TASKS.system_synopsis(tickCtx, taskCtx);
 
       expect(result.shouldWake).toBe(false);
     });
@@ -376,7 +376,7 @@ describe("Heartbeat Tasks", () => {
         conway,
       };
 
-      const result = await BUILTIN_TASKS.check_usdc_balance(tickCtx, taskCtx);
+      const result = await BUILTIN_TASKS.system_synopsis(tickCtx, taskCtx);
 
       expect(result.shouldWake).toBe(true);
       expect(result.message).toContain("USDC");
@@ -394,7 +394,7 @@ describe("Heartbeat Tasks", () => {
         conway,
       };
 
-      const result = await BUILTIN_TASKS.check_usdc_balance(tickCtx, taskCtx);
+      const result = await BUILTIN_TASKS.system_synopsis(tickCtx, taskCtx);
 
       expect(result.shouldWake).toBe(false);
     });
@@ -498,13 +498,13 @@ describe("Heartbeat Tasks", () => {
       const ping = JSON.parse(db.getKV("last_heartbeat_ping")!);
       expect(ping.creditsCents).toBe(7777);
 
-      // Run check_credits — it should also use ctx.creditBalance
-      await BUILTIN_TASKS.check_credits(tickCtx, taskCtx);
+      // Run heartbeat_ping — it should also use ctx.creditBalance
+      await BUILTIN_TASKS.heartbeat_ping(tickCtx, taskCtx);
       const creditCheck = JSON.parse(db.getKV("last_credit_check")!);
       expect(creditCheck.credits).toBe(7777);
 
-      // No direct getCreditsBalance calls should have been made by these tasks
-      // (conway.getCreditsBalance is only called during buildTickContext, not by tasks)
+      // No direct removedBalanceLookup calls should have been made by these tasks
+      // (conway.removedBalanceLookup is only called during buildTickContext, not by tasks)
     });
   });
 });
