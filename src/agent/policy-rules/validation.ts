@@ -10,7 +10,6 @@ import type { PolicyRule, PolicyRequest, PolicyRuleResult } from "../../types.js
 const PACKAGE_NAME_RE = /^[@a-zA-Z0-9._/-]+$/;
 const SKILL_NAME_RE = /^[a-zA-Z0-9-]+$/;
 const GIT_HASH_RE = /^[a-f0-9]{7,40}$/;
-const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const CRON_PARTS_RE = /^(\*|[\d,*/-]+)\s+(\*|[\d,*/-]+)\s+(\*|[\d,*/-]+)\s+(\*|[\d,*/-]+)\s+(\*|[\d,*/-]+)$/;
 
 function deny(rule: string, reasonCode: string, humanMessage: string): PolicyRuleResult {
@@ -157,35 +156,6 @@ function createCronExpressionRule(): PolicyRule {
   };
 }
 
-/**
- * Validate Ethereum address format.
- */
-function createAddressFormatRule(): PolicyRule {
-  return {
-    id: "validate.address_format",
-    description: "Validate Ethereum address format (0x + 40 hex chars)",
-    priority: 100,
-    appliesTo: {
-      by: "name",
-      names: ["fund_child"],
-    },
-    evaluate(request: PolicyRequest): PolicyRuleResult | null {
-      const address = (request.args.to_address as string | undefined)
-        ?? (request.args.agent_address as string | undefined);
-      if (address === undefined) return null;
-
-      if (!ADDRESS_RE.test(address)) {
-        return deny(
-          "validate.address_format",
-          "VALIDATION_FAILED",
-          `Invalid address format: "${address}". Must be 0x followed by 40 hex characters.`,
-        );
-      }
-      return null;
-    },
-  };
-}
-
 export function createValidationRules(): PolicyRule[] {
   return [
     createPackageNameRule(),
@@ -193,6 +163,5 @@ export function createValidationRules(): PolicyRule[] {
     createGitHashRule(),
     createPortRangeRule(),
     createCronExpressionRule(),
-    createAddressFormatRule(),
   ];
 }

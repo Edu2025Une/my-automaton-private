@@ -62,10 +62,7 @@ export interface AutomatonConfig {
   version: string;
   skillsDir: string;
   agentId?: string;
-  maxChildren: number;
   maxTurnsPerCycle?: number;
-  /** Child sandbox memory config (MB), default 1024 */
-  childSandboxMemoryMb?: number;
   parentAddress?: string;
   treasuryPolicy?: TreasuryPolicy;
   // Phase 2 config additions
@@ -91,9 +88,7 @@ export const DEFAULT_CONFIG: Partial<AutomatonConfig> = {
   logLevel: "info",
   version: "0.2.1",
   skillsDir: "~/.automaton/skills",
-  maxChildren: 3,
   maxTurnsPerCycle: 25,
-  childSandboxMemoryMb: 1024,
 };
 
 // ─── Agent State ─────────────────────────────────────────────────
@@ -164,7 +159,6 @@ export type ToolCategory =
   | "skills"
   | "git"
   | "registry"
-  | "replication"
   | "memory";
 
 export interface ToolContext {
@@ -357,9 +351,6 @@ export interface ConwayClient {
   readFile(path: string): Promise<string>;
   exposePort(port: number): Promise<PortInfo>;
   removePort(port: number): Promise<void>;
-  createSandbox(options: CreateSandboxOptions): Promise<SandboxInfo>;
-  deleteSandbox(sandboxId: string): Promise<void>;
-  listSandboxes(): Promise<SandboxInfo[]>;
   registerAutomaton(params: {
     automatonId: string;
     automatonAddress: string;
@@ -386,8 +377,6 @@ export interface ConwayClient {
   deleteDnsRecord(domain: string, recordId: string): Promise<void>;
   // Model discovery
   listModels(): Promise<ModelInfo[]>;
-  /** Create a new client scoped to a specific sandbox ID. */
-  createScopedClient(targetSandboxId: string): ConwayClient;
 }
 
 export interface ExecResult {

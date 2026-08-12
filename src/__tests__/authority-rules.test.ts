@@ -167,38 +167,6 @@ describe("Authority Rules", () => {
       expect(decision.reasonCode).toBe("EXTERNAL_DANGEROUS_TOOL");
     });
 
-    it("blocks spawn_child from heartbeat input", () => {
-      const rules = createAuthorityRules();
-      const engine = new PolicyEngine(db, rules);
-
-      const tool = createMockTool({
-        name: "spawn_child",
-        riskLevel: "dangerous",
-        category: "replication",
-      });
-      const request = createRequest(tool, {}, "heartbeat");
-
-      const decision = engine.evaluate(request);
-      expect(decision.action).toBe("deny");
-      expect(decision.reasonCode).toBe("EXTERNAL_DANGEROUS_TOOL");
-    });
-
-    it("blocks fund_child from external input", () => {
-      const rules = createAuthorityRules();
-      const engine = new PolicyEngine(db, rules);
-
-      const tool = createMockTool({
-        name: "fund_child",
-        riskLevel: "dangerous",
-        category: "replication",
-      });
-      const request = createRequest(tool, {}, undefined);
-
-      const decision = engine.evaluate(request);
-      expect(decision.action).toBe("deny");
-      expect(decision.reasonCode).toBe("EXTERNAL_DANGEROUS_TOOL");
-    });
-
     it("blocks update_genesis_prompt from external input", () => {
       const rules = createAuthorityRules();
       const engine = new PolicyEngine(db, rules);
@@ -270,21 +238,6 @@ describe("Authority Rules", () => {
         category: "conway",
       });
       const request = createRequest(tool, {}, "agent");
-
-      const decision = engine.evaluate(request);
-      expect(decision.action).toBe("allow");
-    });
-
-    it("allows destructive tools from creator input", () => {
-      const rules = createAuthorityRules();
-      const engine = new PolicyEngine(db, rules);
-
-      const tool = createMockTool({
-        name: "spawn_child",
-        riskLevel: "dangerous",
-        category: "replication",
-      });
-      const request = createRequest(tool, {}, "creator");
 
       const decision = engine.evaluate(request);
       expect(decision.action).toBe("allow");
@@ -464,46 +417,6 @@ describe("Rate Limit Rules", () => {
     });
   });
 
-  describe("rate.spawn_daily", () => {
-    it("allows spawn within rate limit", () => {
-      const rules = createRateLimitRules();
-      const engine = new PolicyEngine(db, rules);
-
-      const tool = createMockTool({
-        name: "spawn_child",
-        riskLevel: "dangerous",
-        category: "replication",
-      });
-      const request = createRequest(tool, {}, "agent", db);
-
-      const decision = engine.evaluate(request);
-      expect(decision.action).toBe("allow");
-    });
-
-    it("blocks spawn after 3/day", () => {
-      for (let i = 0; i < 3; i++) {
-        db.prepare(
-          `INSERT INTO policy_decisions (id, tool_name, tool_args_hash, risk_level, decision, reason, created_at)
-           VALUES ('dec_spawn_${i}', 'spawn_child', 'hash${i}', 'dangerous', 'allow', 'ALLOWED', datetime('now'))`,
-        ).run();
-      }
-
-      const rules = createRateLimitRules();
-      const engine = new PolicyEngine(db, rules);
-
-      const tool = createMockTool({
-        name: "spawn_child",
-        riskLevel: "dangerous",
-        category: "replication",
-      });
-      const request = createRequest(tool, {}, "agent", db);
-
-      const decision = engine.evaluate(request);
-      expect(decision.action).toBe("deny");
-      expect(decision.reasonCode).toBe("RATE_LIMIT_SPAWN");
-    });
-  });
-
   describe("rate limit DB unavailable", () => {
     it("denies when DB is not accessible (fail-closed)", () => {
       const rules = createRateLimitRules();
@@ -538,21 +451,6 @@ describe("Rate Limit Rules", () => {
       expect(decision.reasonCode).toBe("DB_UNAVAILABLE");
     });
 
-    it("denies spawn_child when DB is not accessible", () => {
-      const rules = createRateLimitRules();
-      const engine = new PolicyEngine(db, rules);
-
-      const tool = createMockTool({
-        name: "spawn_child",
-        riskLevel: "dangerous",
-        category: "replication",
-      });
-      const request = createRequest(tool, {}, "agent");
-
-      const decision = engine.evaluate(request);
-      expect(decision.action).toBe("deny");
-      expect(decision.reasonCode).toBe("DB_UNAVAILABLE");
-    });
   });
 });
 

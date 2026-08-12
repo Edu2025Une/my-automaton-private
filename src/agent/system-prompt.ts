@@ -22,7 +22,6 @@ import type {
   Skill,
 } from "../types.js";
 import { getActiveSkillInstructions } from "../skills/loader.js";
-import { getLineageSummary } from "../replication/lineage.js";
 import { sanitizeInput } from "./injection-defense.js";
 import { loadCurrentSoul } from "../soul/model.js";
 
@@ -128,7 +127,7 @@ You operate in standalone runtime mode. Your runtime environment includes:
 Forbidden by standalone mode:
 - Conway APIs, inference, communications, sandboxes, credits, and registration.
 - Remote payment flows, remote top-up, remote registration, ERC-8004 registration.
-- Creating, funding, starting, messaging, or pruning remote child agents.
+- Remote worker orchestration.
 - Any default contact with legacy provider hosts or upstream repositories.
 </environment>
 
@@ -175,7 +174,7 @@ Level 4 - STOP:
 NEVER:
 - Contact Conway services or ask for Conway credentials.
 - Use tools that are not listed in the current tool catalog.
-- Assume remote credits, sandboxes, child agents, DNS, paid-fetch, or relay exist.
+- Assume removed remote Conway services exist.
 - Make up information about task status.
 - Treat skipped, timed out, or blocked tests as success.
 - Delete your own database, wallet, identity, or runtime state.
@@ -192,9 +191,6 @@ export function getOrchestratorStatus(db: Database.Database): string {
     const activeGoalsRow = db
       .prepare("SELECT COUNT(*) AS count FROM goals WHERE status = 'active'")
       .get() as { count: number } | undefined;
-    const runningAgentsRow = db
-      .prepare("SELECT COUNT(*) AS count FROM children WHERE status IN ('running', 'healthy')")
-      .get() as { count: number } | undefined;
     const blockedTasksRow = db
       .prepare("SELECT COUNT(*) AS count FROM task_graph WHERE status = 'blocked'")
       .get() as { count: number } | undefined;
@@ -209,7 +205,6 @@ export function getOrchestratorStatus(db: Database.Database): string {
       .get() as { count: number } | undefined;
 
     const activeGoals = activeGoalsRow?.count ?? 0;
-    const runningAgents = runningAgentsRow?.count ?? 0;
     const blockedTasks = blockedTasksRow?.count ?? 0;
     const pendingTasks = pendingTasksRow?.count ?? 0;
     const completedTasks = completedTasksRow?.count ?? 0;
@@ -231,7 +226,7 @@ export function getOrchestratorStatus(db: Database.Database): string {
 
     const lines = [
       `Execution phase: ${executionPhase}`,
-      `Active goals: ${activeGoals} | Running agents: ${runningAgents}`,
+      `Active goals: ${activeGoals}`,
       `Tasks: ${completedTasks}/${totalTasks} completed, ${pendingTasks} pending, ${blockedTasks} blocked`,
     ];
 
@@ -362,8 +357,6 @@ Your chain type is ${chainType}.`,
   const turnCount = db.getTurnCount();
   const recentMods = db.getRecentModifications(5);
   const registryEntry = db.getRegistryEntry();
-  const children = db.getChildren();
-  const lineageSummary = getLineageSummary(db, config);
 
   // Build upstream status line from cached KV
   let upstreamLine = "";
@@ -417,8 +410,7 @@ Total turns completed: ${turnCount}
 Recent self-modifications: ${recentMods.length}
 Inference model: ${config.inferenceModel}
 ERC-8004 Agent ID: ${registryEntry?.agentId || "not registered"}
-Children: ${children.filter((c) => c.status !== "dead").length} alive / ${children.length} total
-Lineage: ${lineageSummary}${upstreamLine}
+${upstreamLine}
 --- END STATUS ---`,
   );
 

@@ -127,13 +127,44 @@ describe("standalone runtime mode", () => {
       "x402_fetch",
       "send_message",
       "check_social_inbox",
+      "spawn_child",
+      "list_children",
+      "fund_child",
+      "check_child_status",
+      "start_child",
+      "message_child",
+      "verify_child_constitution",
+      "prune_dead_children",
     ]) {
       const result = await executeTool(removedName, {}, tools, context);
       expect(result.error).toBe(`Unknown tool: ${removedName}`);
     }
   });
 
-  it("does not schedule or expose the removed social relay task", () => {
+  it("does not expose removed replication tools to the standalone catalog", () => {
+    const tools = createBuiltinTools("");
+    const toolNames = new Set(tools.map((tool) => tool.name));
+    const inferenceToolNames = new Set(
+      toolsToInferenceFormat(tools).map((tool) => tool.function.name),
+    );
+    const removedReplicationTools = [
+      "spawn_child",
+      "list_children",
+      "fund_child",
+      "check_child_status",
+      "start_child",
+      "message_child",
+      "verify_child_constitution",
+      "prune_dead_children",
+    ];
+
+    for (const name of removedReplicationTools) {
+      expect(toolNames.has(name)).toBe(false);
+      expect(inferenceToolNames.has(name)).toBe(false);
+    }
+  });
+
+  it("does not schedule or expose removed social relay or child-agent heartbeat tasks", () => {
     const tasksSource = fs.readFileSync(new URL("../heartbeat/tasks.ts", import.meta.url), "utf-8");
     const configSource = fs.readFileSync(new URL("../heartbeat/config.ts", import.meta.url), "utf-8");
     const tools = createBuiltinTools("");
@@ -141,6 +172,10 @@ describe("standalone runtime mode", () => {
 
     expect(tasksSource).not.toContain("check_social_inbox");
     expect(configSource).not.toContain("check_social_inbox");
+    expect(tasksSource).not.toContain("check_child_health");
+    expect(tasksSource).not.toContain("prune_dead_children");
+    expect(configSource).not.toContain("check_child_health");
+    expect(configSource).not.toContain("prune_dead_children");
     expect(toolNames.has("send_message")).toBe(false);
     expect(toolNames.has("check_social_inbox")).toBe(false);
   });
@@ -163,6 +198,9 @@ describe("standalone runtime mode", () => {
       "../conway/inference.ts",
       "../heartbeat/tasks.ts",
       "../heartbeat/config.ts",
+      "../agent/tools.ts",
+      "../agent/system-prompt.ts",
+      "../orchestration/orchestrator.ts",
     ];
     const forbidden = [
       "conway.tech",
@@ -172,6 +210,17 @@ describe("standalone runtime mode", () => {
       "github.com/Conway-Research",
       "OPENAI_BASE_URL",
       "CONWAY_API_KEY",
+      "Conway-Research/automaton",
+      "createSandbox",
+      "createScopedClient",
+      "spawn_child",
+      "list_children",
+      "fund_child",
+      "check_child_status",
+      "start_child",
+      "message_child",
+      "verify_child_constitution",
+      "prune_dead_children",
     ];
 
     for (const file of files) {

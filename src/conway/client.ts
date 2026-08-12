@@ -245,50 +245,6 @@ export function createConwayClient(options: ConwayClientOptions): ConwayClient {
     await request("DELETE", `/v1/sandboxes/${sandboxId}/ports/${port}`);
   };
 
-  // ─── Sandbox Management (other sandboxes) ────────────────────
-
-  const createSandbox = async (
-    options: CreateSandboxOptions,
-  ): Promise<SandboxInfo> => {
-    const result = await request("POST", "/v1/sandboxes", {
-      name: options.name,
-      vcpu: options.vcpu || 1,
-      memory_mb: options.memoryMb || 512,
-      disk_gb: options.diskGb || 5,
-      region: options.region,
-    });
-    return {
-      id: result.id || result.sandbox_id,
-      status: result.status || "running",
-      region: result.region || "",
-      vcpu: result.vcpu || options.vcpu || 1,
-      memoryMb: result.memory_mb || options.memoryMb || 512,
-      diskGb: result.disk_gb || options.diskGb || 5,
-      terminalUrl: result.terminal_url,
-      createdAt: result.created_at || new Date().toISOString(),
-    };
-  };
-
-  const deleteSandbox = async (_targetId: string): Promise<void> => {
-    // Conway API no longer supports sandbox deletion.
-    // Sandboxes are prepaid and non-refundable — this is a no-op.
-  };
-
-  const listSandboxes = async (): Promise<SandboxInfo[]> => {
-    const result = await request("GET", "/v1/sandboxes");
-    const sandboxes = Array.isArray(result) ? result : result.sandboxes || [];
-    return sandboxes.map((s: any) => ({
-      id: s.id || s.sandbox_id,
-      status: s.status || "unknown",
-      region: s.region || "",
-      vcpu: s.vcpu || 0,
-      memoryMb: s.memory_mb || 0,
-      diskGb: s.disk_gb || 0,
-      terminalUrl: s.terminal_url,
-      createdAt: s.created_at || "",
-    }));
-  };
-
   const registerAutomaton = async (params: {
     automatonId: string;
     automatonAddress: string;
@@ -502,19 +458,12 @@ export function createConwayClient(options: ConwayClientOptions): ConwayClient {
     return [];
   };
 
-  const createScopedClient = (targetSandboxId: string): ConwayClient => {
-    return createConwayClient({ apiUrl, apiKey, sandboxId: targetSandboxId });
-  };
-
   const client: ConwayClient = {
     exec,
     writeFile,
     readFile,
     exposePort,
     removePort,
-    createSandbox,
-    deleteSandbox,
-    listSandboxes,
     registerAutomaton,
     searchDomains,
     registerDomain,
@@ -522,7 +471,6 @@ export function createConwayClient(options: ConwayClientOptions): ConwayClient {
     addDnsRecord,
     deleteDnsRecord,
     listModels,
-    createScopedClient,
   };
 
   // SECURITY: API credentials are NOT exposed on the client object.

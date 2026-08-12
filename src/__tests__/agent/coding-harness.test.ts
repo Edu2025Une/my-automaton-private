@@ -17,17 +17,13 @@ function createConwayStub(overrides?: Partial<ConwayClient>): ConwayClient {
     readFile: async () => "",
     exposePort: async () => ({ port: 0, publicUrl: "", sandboxId: "" }),
     removePort: async () => undefined,
-    createSandbox: async () => ({ id: "", status: "", region: "", vcpu: 0, memoryMb: 0, diskGb: 0, createdAt: "" }),
-    deleteSandbox: async () => undefined,
-    listSandboxes: async () => [],
-        registerAutomaton: async () => ({ automaton: {} }),
+    registerAutomaton: async () => ({ automaton: {} }),
     searchDomains: async () => [],
     registerDomain: async () => ({ domain: "", status: "pending", registrationDate: "", expirationDate: "", nameservers: [] }),
     listDnsRecords: async () => [],
     addDnsRecord: async () => ({ id: "", type: "A", host: "", value: "", ttl: 300 }),
     deleteDnsRecord: async () => undefined,
     listModels: async () => [],
-    createScopedClient: () => createConwayStub(),
     ...overrides,
   } as ConwayClient;
 }

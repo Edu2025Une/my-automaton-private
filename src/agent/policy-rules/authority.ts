@@ -56,8 +56,6 @@ function isExternalSource(inputSource: string | undefined): boolean {
  */
 const EXTERNAL_BLOCKED_TOOLS = [
   "delete_sandbox",
-  "spawn_child",
-  "fund_child",
   "update_genesis_prompt",
 ] as const;
 

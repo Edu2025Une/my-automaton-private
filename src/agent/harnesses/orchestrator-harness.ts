@@ -404,7 +404,7 @@ You follow a strict planner-backed plan → execute → verify → fix cycle:
       availableRoles: ["executor", "researcher", "tester", "generalist", "orchestrator", "critic"],
       idleAgents: 0,
       busyAgents: Math.max(1, this.getManagedTasks().filter((task) => task.status === "assigned" || task.status === "running").length),
-      maxAgents: Math.max(1, Number(this.context.config?.maxChildren ?? this.getManagedTasks().length ?? 1)),
+      maxAgents: Math.max(1, this.getManagedTasks().length || 1),
     });
 
     const explicitFailedTask = params.failedTaskId

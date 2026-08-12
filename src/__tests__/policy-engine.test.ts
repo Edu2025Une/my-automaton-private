@@ -552,9 +552,9 @@ describe("Tool risk classifications", () => {
   it("classifies safe tools correctly", () => {
     const tools = createBuiltinTools("test-sandbox-id");
     const expectedSafe = [
-      "read_file", "heartbeat_ping", "system_synopsis", "list_sandboxes",
-      "list_models", "system_synopsis", "list_skills", "list_children",
-      "check_child_status", "git_status", "git_diff", "git_log",
+      "read_file", "heartbeat_ping", "system_synopsis",
+      "list_models", "system_synopsis", "list_skills",
+      "git_status", "git_diff", "git_log",
       "check_reputation", "discover_agents", "heartbeat_ping",
       "search_domains", "manage_dns",
     ];
@@ -571,7 +571,7 @@ describe("Tool risk classifications", () => {
       "edit_own_file", "pull_upstream", "install_npm_package",
       "install_mcp_server", "install_skill", "create_skill", "remove_skill",
       "register_domain",
-      "spawn_child", "delete_sandbox", "update_genesis_prompt",
+      "update_genesis_prompt",
       "register_erc8004", "give_feedback", "distress_signal",
     ];
     for (const name of expectedDangerous) {

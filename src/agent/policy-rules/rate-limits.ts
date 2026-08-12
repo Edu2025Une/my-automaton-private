@@ -102,41 +102,11 @@ function createSelfModHourlyRule(): PolicyRule {
 }
 
 /**
- * Maximum 3 child spawns per day.
- */
-function createSpawnDailyRule(): PolicyRule {
-  return {
-    id: "rate.spawn_daily",
-    description: "Maximum 3 spawn_child calls per day",
-    priority: 600,
-    appliesTo: { by: "name", names: ["spawn_child"] },
-    evaluate(request: PolicyRequest): PolicyRuleResult | null {
-      const db = (request.context.db as any)?.raw ?? (request.context as any).rawDb;
-      if (!db) return deny(this.id, "DB_UNAVAILABLE", "Rate limit check failed: database not accessible");
-
-      const oneDayMs = 24 * 60 * 60 * 1000;
-      const recentCount = countRecentDecisions(db, "spawn_child", oneDayMs);
-
-      if (recentCount >= 3) {
-        return deny(
-          "rate.spawn_daily",
-          "RATE_LIMIT_SPAWN",
-          `Child spawn rate exceeded: ${recentCount} spawns in the last 24 hours (max 3/day)`,
-        );
-      }
-
-      return null;
-    },
-  };
-}
-
-/**
  * Create all rate limit policy rules.
  */
 export function createRateLimitRules(): PolicyRule[] {
   return [
     createGenesisPromptDailyRule(),
     createSelfModHourlyRule(),
-    createSpawnDailyRule(),
   ];
 }

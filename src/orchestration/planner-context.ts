@@ -3,14 +3,12 @@ import path from "node:path";
 import type { Database } from "better-sqlite3";
 import { persistPlan } from "./plan-mode.js";
 import type { PlannerContext, PlannerOutput } from "./planner.js";
-import type { FundingProtocol } from "./types.js";
 import type { AgentWorkspace } from "./workspace.js";
 import { getActiveGoals } from "../state/database.js";
 
 export interface PlannerContextOptions {
   db: Database;
   workspace?: Pick<AgentWorkspace, "basePath" | "listOutputs">;
-  funding?: Pick<FundingProtocol, "getBalance">;
   identityAddress?: string;
   creditsCents?: number;
   usdcBalance?: number;
@@ -168,17 +166,6 @@ async function resolveCreditsCents(
 ): Promise<number> {
   if (typeof options.creditsCents === "number" && Number.isFinite(options.creditsCents)) {
     return Math.max(0, Math.floor(options.creditsCents));
-  }
-
-  if (options.funding && options.identityAddress) {
-    try {
-      const balance = await options.funding.getBalance(options.identityAddress);
-      if (Number.isFinite(balance)) {
-        return Math.max(0, Math.floor(balance));
-      }
-    } catch {
-      // Fall back to cached or default balances.
-    }
   }
 
   return Math.max(0, Math.floor(cachedCreditsCents ?? 0));

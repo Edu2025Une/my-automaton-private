@@ -1,7 +1,6 @@
 import type {
   AutomatonConfig,
   ConwayClient,
-  CreateSandboxOptions,
   DomainRegistration,
   DomainSearchResult,
   DnsRecord,
@@ -9,7 +8,6 @@ import type {
   ModelInfo,
   PortInfo,
   RuntimeMode,
-  SandboxInfo,
 } from "./types.js";
 import {
   resolveExplicitStandaloneProvider,
@@ -119,9 +117,6 @@ export function createStandaloneConwayClient(): ConwayClient {
     readFile: async () => disabled(),
     exposePort: async (_port: number): Promise<PortInfo> => disabled(),
     removePort: async () => disabled(),
-    createSandbox: async (_options: CreateSandboxOptions): Promise<SandboxInfo> => disabled(),
-    deleteSandbox: async () => disabled(),
-    listSandboxes: async (): Promise<SandboxInfo[]> => disabled(),
     searchDomains: async (): Promise<DomainSearchResult[]> => disabled(),
     registerDomain: async (_domain: string): Promise<DomainRegistration> => disabled(),
     listDnsRecords: async (): Promise<DnsRecord[]> => disabled(),
@@ -129,6 +124,5 @@ export function createStandaloneConwayClient(): ConwayClient {
     deleteDnsRecord: async () => disabled(),
     listModels: async (): Promise<ModelInfo[]> => disabled(),
     registerAutomaton: async () => disabled(),
-    createScopedClient: () => createStandaloneConwayClient(),
   };
 }

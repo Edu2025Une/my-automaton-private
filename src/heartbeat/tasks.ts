@@ -14,7 +14,6 @@ import type {
   HeartbeatTaskFn,
   SurvivalTier,
 } from "../types.js";
-import type { HealthMonitor as ColonyHealthMonitor } from "../orchestration/health-monitor.js";
 import { getSurvivalTier } from "../survival/tiers.js";
 import { createLogger } from "../observability/logger.js";
 import { getMetrics } from "../observability/metrics.js";
@@ -34,7 +33,6 @@ function getAlertEngine(): AlertEngine {
 }
 
 export const COLONY_TASK_INTERVALS_MS = {
-  colony_health_check: 300_000,
   colony_financial_report: 3_600_000,
   agent_pool_optimize: 1_800_000,
   knowledge_store_prune: 86_400_000,
@@ -170,49 +168,6 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
     return { shouldWake: false };
   },
 
-  // === Phase 3.1: Child Health Check ===
-  check_child_health: async (_ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
-    try {
-      const { ChildLifecycle } = await import("../replication/lifecycle.js");
-      const { ChildHealthMonitor } = await import("../replication/health.js");
-      const lifecycle = new ChildLifecycle(taskCtx.db.raw);
-      const monitor = new ChildHealthMonitor(taskCtx.db.raw, taskCtx.conway, lifecycle);
-      const results = await monitor.checkAllChildren();
-
-      const unhealthy = results.filter((r) => !r.healthy);
-      if (unhealthy.length > 0) {
-        for (const r of unhealthy) {
-          logger.warn(`Child ${r.childId} unhealthy: ${r.issues.join(", ")}`);
-        }
-        return {
-          shouldWake: true,
-          message: `${unhealthy.length} child(ren) unhealthy: ${unhealthy.map((r) => r.childId.slice(0, 8)).join(", ")}`,
-        };
-      }
-    } catch (error) {
-      logger.error("check_child_health failed", error instanceof Error ? error : undefined);
-    }
-    return { shouldWake: false };
-  },
-
-  // === Phase 3.1: Prune Dead Children ===
-  prune_dead_children: async (_ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
-    try {
-      const { ChildLifecycle } = await import("../replication/lifecycle.js");
-      const { SandboxCleanup } = await import("../replication/cleanup.js");
-      const { pruneDeadChildren } = await import("../replication/lineage.js");
-      const lifecycle = new ChildLifecycle(taskCtx.db.raw);
-      const cleanup = new SandboxCleanup(taskCtx.conway, lifecycle, taskCtx.db.raw);
-      const pruned = await pruneDeadChildren(taskCtx.db, cleanup);
-      if (pruned > 0) {
-        logger.info(`Pruned ${pruned} dead children`);
-      }
-    } catch (error) {
-      logger.error("prune_dead_children failed", error instanceof Error ? error : undefined);
-    }
-    return { shouldWake: false };
-  },
-
   health_check: async (_ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
     // Check that the sandbox is healthy
     try {
@@ -288,37 +243,6 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
     }
   },
 
-  colony_health_check: async (_ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
-    if (!shouldRunAtInterval(taskCtx, "colony_health_check", COLONY_TASK_INTERVALS_MS.colony_health_check)) {
-      return { shouldWake: false };
-    }
-
-    try {
-      const monitor = await createHealthMonitor(taskCtx);
-      const report = await monitor.checkAll();
-      const actions = await monitor.autoHeal(report);
-
-      taskCtx.db.setKV("last_colony_health_report", JSON.stringify(report));
-      taskCtx.db.setKV("last_colony_heal_actions", JSON.stringify({
-        timestamp: new Date().toISOString(),
-        actions,
-      }));
-
-      const failedActions = actions.filter((action) => !action.success).length;
-      const shouldWake = report.unhealthyAgents > 0 || failedActions > 0;
-
-      return {
-        shouldWake,
-        message: shouldWake
-          ? `Colony health: ${report.unhealthyAgents} unhealthy, ${actions.length} heal action(s), ${failedActions} failed`
-          : undefined,
-      };
-    } catch (error) {
-      logger.error("colony_health_check failed", error instanceof Error ? error : undefined);
-      return { shouldWake: false };
-    }
-  },
-
   colony_financial_report: async (_ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
     if (!shouldRunAtInterval(taskCtx, "colony_financial_report", COLONY_TASK_INTERVALS_MS.colony_financial_report)) {
       return { shouldWake: false };
@@ -348,10 +272,6 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
         }
       }
 
-      const childFunding = taskCtx.db.raw
-        .prepare("SELECT COALESCE(SUM(funded_amount_cents), 0) AS total FROM children")
-        .get() as { total: number };
-
       const taskCosts = taskCtx.db.raw
         .prepare(
           `SELECT COALESCE(SUM(actual_cost_cents), 0) AS total
@@ -365,11 +285,7 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
         revenueCents,
         expenseCents,
         netCents: revenueCents - expenseCents,
-        fundedToChildrenCents: childFunding.total,
         taskExecutionCostCents: taskCosts.total,
-        activeAgents: taskCtx.db.getChildren().filter(
-          (child) => child.status !== "dead" && child.status !== "cleaned_up",
-        ).length,
       };
 
       taskCtx.db.setKV("last_colony_financial_report", JSON.stringify(report));
@@ -386,39 +302,6 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
     }
 
     try {
-      const IDLE_CULL_MS = 60 * 60 * 1000;
-      const now = Date.now();
-      const children = taskCtx.db.getChildren();
-
-      const activeAssignments = taskCtx.db.raw
-        .prepare(
-          `SELECT DISTINCT assigned_to AS address
-           FROM task_graph
-           WHERE assigned_to IS NOT NULL
-             AND status IN ('assigned', 'running')`,
-        )
-        .all() as Array<{ address: string }>;
-
-      const busyAgents = new Set(
-        activeAssignments
-          .map((row) => row.address)
-          .filter((value): value is string => typeof value === "string" && value.length > 0),
-      );
-
-      let culled = 0;
-      for (const child of children) {
-        if (!["running", "healthy", "sleeping"].includes(child.status)) continue;
-        if (busyAgents.has(child.address)) continue;
-
-        const lastSeenIso = child.lastChecked ?? child.createdAt;
-        const lastSeenMs = Date.parse(lastSeenIso);
-        if (Number.isNaN(lastSeenMs)) continue;
-        if (now - lastSeenMs < IDLE_CULL_MS) continue;
-
-        taskCtx.db.updateChildStatus(child.id, "stopped");
-        culled += 1;
-      }
-
       const pendingUnassignedRow = taskCtx.db.raw
         .prepare(
           `SELECT COUNT(*) AS count
@@ -428,42 +311,13 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
         )
         .get() as { count: number };
 
-      const idleAgents = children.filter(
-        (child) =>
-          (child.status === "running" || child.status === "healthy")
-          && !busyAgents.has(child.address),
-      ).length;
-
-      const activeAgents = children.filter(
-        (child) => child.status !== "dead" && child.status !== "cleaned_up" && child.status !== "failed",
-      ).length;
-
-      const spawnNeeded = Math.max(0, pendingUnassignedRow.count - idleAgents);
-      const spawnCapacity = Math.max(0, taskCtx.config.maxChildren - activeAgents);
-      const spawnRequested = Math.min(spawnNeeded, spawnCapacity);
-
       taskCtx.db.setKV("last_agent_pool_optimize", JSON.stringify({
         timestamp: new Date().toISOString(),
-        culled,
         pendingTasks: pendingUnassignedRow.count,
-        idleAgents,
-        spawnRequested,
       }));
 
-      if (spawnRequested > 0) {
-        taskCtx.db.setKV("agent_pool_spawn_request", JSON.stringify({
-          timestamp: new Date().toISOString(),
-          requested: spawnRequested,
-          pendingTasks: pendingUnassignedRow.count,
-          idleAgents,
-        }));
-      }
-
       return {
-        shouldWake: spawnRequested > 0,
-        message: spawnRequested > 0
-          ? `Agent pool needs ${spawnRequested} additional agent(s) for pending workload`
-          : undefined,
+        shouldWake: false,
       };
     } catch (error) {
       logger.error("agent_pool_optimize failed", error instanceof Error ? error : undefined);
@@ -498,25 +352,11 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
       return { shouldWake: false };
     }
 
-    try {
-      const { ChildLifecycle } = await import("../replication/lifecycle.js");
-      const { SandboxCleanup } = await import("../replication/cleanup.js");
-      const { pruneDeadChildren } = await import("../replication/lineage.js");
-
-      const lifecycle = new ChildLifecycle(taskCtx.db.raw);
-      const cleanup = new SandboxCleanup(taskCtx.conway, lifecycle, taskCtx.db.raw);
-      const cleaned = await pruneDeadChildren(taskCtx.db, cleanup);
-
-      taskCtx.db.setKV("last_dead_agent_cleanup", JSON.stringify({
-        timestamp: new Date().toISOString(),
-        cleaned,
-      }));
-
-      return { shouldWake: false };
-    } catch (error) {
-      logger.error("dead_agent_cleanup failed", error instanceof Error ? error : undefined);
-      return { shouldWake: false };
-    }
+    taskCtx.db.setKV("last_dead_agent_cleanup", JSON.stringify({
+      timestamp: new Date().toISOString(),
+      cleaned: 0,
+    }));
+    return { shouldWake: false };
   },
 };
 
@@ -549,17 +389,4 @@ function shouldRunAtInterval(
 
   taskCtx.db.setKV(key, new Date(now).toISOString());
   return true;
-}
-
-async function createHealthMonitor(taskCtx: HeartbeatLegacyContext): Promise<ColonyHealthMonitor> {
-  const { LocalDBTransport, ColonyMessaging } = await import("../orchestration/messaging.js");
-  const { SimpleAgentTracker, SimpleFundingProtocol } = await import("../orchestration/simple-tracker.js");
-  const { HealthMonitor } = await import("../orchestration/health-monitor.js");
-
-  const tracker = new SimpleAgentTracker(taskCtx.db);
-  const funding = new SimpleFundingProtocol(taskCtx.conway, taskCtx.identity, taskCtx.db);
-  const transport = new LocalDBTransport(taskCtx.db);
-  const messaging = new ColonyMessaging(transport, taskCtx.db);
-
-  return new HealthMonitor(taskCtx.db, tracker, funding, messaging);
 }

@@ -1,17 +1,14 @@
 import type { Database } from "better-sqlite3";
-import { ulid } from "ulid";
 import type { AutomatonIdentity } from "../types.js";
 import { createLogger } from "../observability/logger.js";
 import {
   assignTask,
-  completeTask,
   decomposeGoal,
   failTask,
   getGoalProgress,
   getReadyTasks,
   type Goal,
   type TaskNode,
-  type TaskResult,
   normalizeTaskResult,
 } from "./task-graph.js";
 import {
@@ -22,7 +19,6 @@ import {
   type PlannedTask,
   taskToPlannerFailureInput,
 } from "./planner.js";
-import { ColonyMessaging, type AgentMessage } from "./messaging.js";
 import { generateTodoMd } from "./attention.js";
 import { UnifiedInferenceClient } from "../inference/inference-client.js";
 import { reviewPlan } from "./plan-mode.js";
@@ -37,18 +33,24 @@ import {
   type GoalRow,
   type TaskGraphRow,
 } from "../state/database.js";
-import type {
-  AgentAssignment,
-  AgentTracker,
-  FundingProtocol,
-  OrchestratorTickResult,
-} from "./types.js";
+export interface OrchestratorTickResult {
+  phase: string;
+  tasksAssigned: number;
+  tasksCompleted: number;
+  tasksFailed: number;
+  goalsActive: number;
+  agentsActive: number;
+}
+
+interface AgentAssignment {
+  agentAddress: string;
+  agentName: string;
+}
 
 const logger = createLogger("orchestration.orchestrator");
 
 const ORCHESTRATOR_STATE_KEY = "orchestrator.state";
 const ORCHESTRATOR_TODO_KEY = "orchestrator.todo_md";
-const DEFAULT_TASK_FUNDING_CENTS = 25;
 const DEFAULT_MAX_REPLANS = 3;
 
 type ExecutionPhase =
@@ -69,13 +71,6 @@ interface OrchestratorState {
   failedError: string | null;
 }
 
-interface TaskResultEnvelope {
-  taskId: string;
-  goalId: string | null;
-  result: TaskResult;
-  error?: string;
-}
-
 interface TickCounters {
   tasksAssigned: number;
   tasksCompleted: number;
@@ -91,13 +86,8 @@ const DEFAULT_STATE: OrchestratorState = {
 };
 
 export class Orchestrator {
-  private pendingTaskResults: TaskResultEnvelope[] = [];
-
   constructor(private readonly params: {
     db: Database;
-    agentTracker: AgentTracker;
-    funding: FundingProtocol;
-    messaging: ColonyMessaging;
     inference: UnifiedInferenceClient;
     identity: AutomatonIdentity;
     config: any;
@@ -193,92 +183,18 @@ export class Orchestrator {
   }
 
   async matchTaskToAgent(task: TaskNode): Promise<AgentAssignment> {
-    const requestedRole = task.agentRole?.trim() || "generalist";
-
-    const idleAgents = this.params.agentTracker.getIdle();
-    const directRoleMatch = idleAgents.find((agent) => agent.role === requestedRole);
-    if (directRoleMatch) {
-      return {
-        agentAddress: directRoleMatch.address,
-        agentName: directRoleMatch.name,
-        spawned: false,
-      };
-    }
-
-    const bestIdle = this.params.agentTracker.getBestForTask(requestedRole);
-    if (bestIdle) {
-      return {
-        agentAddress: bestIdle.address,
-        agentName: bestIdle.name,
-        spawned: false,
-      };
-    }
-
-    const spawned = await this.trySpawnAgent(task);
-    if (spawned) {
-      return spawned;
-    }
-
-    const reassigned = this.findBusyAgentForReassign();
-    if (reassigned) {
-      return {
-        agentAddress: reassigned.address,
-        agentName: reassigned.name,
-        spawned: false,
-      };
-    }
-
-    // Fallback: assign to the parent agent itself (self-execution mode).
-    // This handles local dev environments where spawning child sandboxes
-    // is not available, and ensures goals still make progress.
     if (this.params.identity?.address) {
-      logger.warn("No child agents available, self-assigning task to parent", {
+      logger.info("Assigning task to standalone runtime", {
         taskId: task.id,
-        role: requestedRole,
+        role: task.agentRole?.trim() || "generalist",
       });
       return {
         agentAddress: this.params.identity.address,
-        agentName: this.params.identity.name ?? "parent",
-        spawned: false,
+        agentName: this.params.identity.name ?? "standalone",
       };
     }
 
-    throw new Error(`No available agent for task ${task.id}`);
-  }
-
-  async fundAgentForTask(addr: string, task: TaskNode): Promise<void> {
-    const estimated = Math.max(0, task.metadata.estimatedCostCents);
-    const configuredDefault = Number(this.params.config?.defaultTaskFundingCents ?? DEFAULT_TASK_FUNDING_CENTS);
-    const amountCents = Math.max(estimated, Number.isFinite(configuredDefault) ? configuredDefault : 0);
-
-    if (amountCents <= 0) {
-      return;
-    }
-
-    const result = await this.params.funding.fundChild(addr, amountCents);
-    if (!result.success) {
-      throw new Error(`Funding transfer failed for ${addr}`);
-    }
-  }
-
-  async collectResults(): Promise<TaskResult[]> {
-    this.pendingTaskResults = [];
-
-    const processed = await this.params.messaging.processInbox();
-    for (const entry of processed) {
-      if (!entry.success || entry.message.type !== "task_result") {
-        continue;
-      }
-
-      const parsed = parseTaskResultMessage(entry.message);
-      if (!parsed) {
-        continue;
-      }
-
-      this.pendingTaskResults.push(parsed);
-    }
-
-    return this.pendingTaskResults.map((entry) => entry.result);
+    throw new Error(`Standalone identity is unavailable for task ${task.id}`);
   }
 
   async handleFailure(task: TaskNode, error: string): Promise<void> {
@@ -403,12 +319,11 @@ export class Orchestrator {
         await buildPlannerContext({
           db: this.params.db,
           workspace: new AgentWorkspace(goal.id),
-          funding: this.params.funding,
           identityAddress: this.params.identity.address,
           usdcBalance: Number(this.params.config?.usdcBalance ?? 0),
-          idleAgents: this.params.agentTracker.getIdle().length,
-          busyAgents: Math.max(0, this.getActiveAgentCount() - this.params.agentTracker.getIdle().length),
-          maxAgents: Number(this.params.config?.maxChildren ?? 3),
+          idleAgents: 1,
+          busyAgents: 0,
+          maxAgents: 1,
         }),
         this.params.inference,
       );
@@ -554,50 +469,9 @@ export class Orchestrator {
       try {
         const assignment = await this.matchTaskToAgent(task);
         assignTask(this.params.db, task.id, assignment.agentAddress);
-
-        const isLocalWorker = assignment.agentAddress.startsWith("local://");
-        const isSelfAssigned = assignment.agentAddress === this.params.identity?.address;
-
-        // Local workers receive their task directly at spawn time and run
-        // their own inference loop. Self-assigned tasks are handled by the
-        // parent agent via its normal turn. Neither needs funding or messaging.
-        if (!isLocalWorker && !isSelfAssigned) {
-          await this.fundAgentForTask(assignment.agentAddress, task);
-
-          const message = this.params.messaging.createMessage({
-            type: "task_assignment",
-            to: assignment.agentAddress,
-            goalId: task.goalId,
-            taskId: task.id,
-            priority: "high",
-            requiresResponse: true,
-            content: JSON.stringify({
-              taskId: task.id,
-              title: task.title,
-              description: task.description,
-              agentRole: task.agentRole,
-              dependencies: task.dependencies,
-              timeoutMs: task.metadata.timeoutMs,
-            }),
-          });
-
-          await this.params.messaging.send(message);
-        }
-
-        this.params.agentTracker.updateStatus(assignment.agentAddress, "running");
         counters.tasksAssigned += 1;
       } catch (error) {
         const err = normalizeError(error);
-
-        // If no agent is available, skip this task — it stays pending and will
-        // be retried on the next tick when an agent becomes available or is spawned.
-        if (err.message.startsWith("No available agent")) {
-          logger.warn("No agent available for task, will retry next tick", {
-            taskId: task.id,
-            role: task.agentRole,
-          });
-          continue;
-        }
 
         const previous = getTaskById(this.params.db, task.id);
         await this.handleFailure(task, err.message);
@@ -605,43 +479,6 @@ export class Orchestrator {
         if (previous?.status !== "failed" && latest?.status === "failed") {
           counters.tasksFailed += 1;
         }
-      }
-    }
-
-    await this.collectResults();
-
-    for (const event of this.pendingTaskResults) {
-      const taskRow = getTaskById(this.params.db, event.taskId);
-      if (!taskRow) {
-        continue;
-      }
-
-      if (event.result.success) {
-        try {
-          completeTask(this.params.db, taskRow.id, event.result);
-          counters.tasksCompleted += 1;
-
-          if (taskRow.assignedTo) {
-            this.params.agentTracker.updateStatus(taskRow.assignedTo, "healthy");
-          }
-        } catch (error) {
-          const err = normalizeError(error);
-          const taskNode = taskRowToTaskNode(taskRow);
-          await this.handleFailure(taskNode, err.message);
-          const latest = getTaskById(this.params.db, taskNode.id);
-          if (taskRow.status !== "failed" && latest?.status === "failed") {
-            counters.tasksFailed += 1;
-          }
-        }
-
-        continue;
-      }
-
-      const taskNode = taskRowToTaskNode(taskRow);
-      await this.handleFailure(taskNode, event.error ?? event.result.output);
-      const latest = getTaskById(this.params.db, taskNode.id);
-      if (taskRow.status !== "failed" && latest?.status === "failed") {
-        counters.tasksFailed += 1;
       }
     }
 
@@ -704,12 +541,11 @@ export class Orchestrator {
         await buildPlannerContext({
           db: this.params.db,
           workspace: new AgentWorkspace(goal.id),
-          funding: this.params.funding,
           identityAddress: this.params.identity.address,
           usdcBalance: Number(this.params.config?.usdcBalance ?? 0),
-          idleAgents: this.params.agentTracker.getIdle().length,
-          busyAgents: Math.max(0, this.getActiveAgentCount() - this.params.agentTracker.getIdle().length),
-          maxAgents: Number(this.params.config?.maxChildren ?? 3),
+          idleAgents: 1,
+          busyAgents: 0,
+          maxAgents: 1,
         }),
         this.params.inference,
       );
@@ -780,8 +616,6 @@ export class Orchestrator {
   }
 
   private async handleCompletePhase(state: OrchestratorState): Promise<OrchestratorState> {
-    await this.recallAgentCredits();
-
     return {
       ...DEFAULT_STATE,
       phase: "idle",
@@ -842,76 +676,6 @@ export class Orchestrator {
         estimatedSteps,
         requiresPlanMode: estimatedSteps > 3,
       };
-    }
-  }
-
-  private findBusyAgentForReassign(): { address: string; name: string } | null {
-    const idleAddresses = new Set(this.params.agentTracker.getIdle().map((agent) => agent.address));
-
-    const rows = this.params.db.prepare(
-      `SELECT name, address, status
-       FROM children
-       WHERE status IN ('running', 'healthy')
-       ORDER BY created_at ASC`,
-    ).all() as { name: string; address: string; status: string }[];
-
-    const candidate = rows.find((row) => !idleAddresses.has(row.address));
-    if (!candidate) {
-      return null;
-    }
-
-    return {
-      address: candidate.address,
-      name: candidate.name,
-    };
-  }
-
-  private async trySpawnAgent(task: TaskNode): Promise<AgentAssignment | null> {
-    if (this.params.config?.disableSpawn === true) {
-      return null;
-    }
-
-    const spawn = this.params.config?.spawnAgent;
-    if (typeof spawn !== "function") {
-      return null;
-    }
-
-    const spawned = await spawn(task);
-    if (!spawned || typeof spawned.address !== "string" || typeof spawned.name !== "string") {
-      return null;
-    }
-
-    this.params.agentTracker.register({
-      address: spawned.address,
-      name: spawned.name,
-      role: task.agentRole ?? "generalist",
-      sandboxId: typeof spawned.sandboxId === "string" ? spawned.sandboxId : ulid(),
-    });
-
-    this.params.agentTracker.updateStatus(spawned.address, "running");
-
-    return {
-      agentAddress: spawned.address,
-      agentName: spawned.name,
-      spawned: true,
-    };
-  }
-
-  private async recallAgentCredits(): Promise<void> {
-    const children = this.params.db.prepare(
-      `SELECT address FROM children WHERE status IN ('running', 'healthy')`,
-    ).all() as { address: string }[];
-
-    for (const child of children) {
-      try {
-        await this.params.funding.recallCredits(child.address);
-      } catch (error) {
-        const err = normalizeError(error);
-        logger.warn("Failed to recall credits", {
-          address: child.address,
-          error: err.message,
-        });
-      }
     }
   }
 
@@ -996,11 +760,7 @@ export class Orchestrator {
   }
 
   private getActiveAgentCount(): number {
-    const row = this.params.db.prepare(
-      `SELECT COUNT(*) AS count FROM children WHERE status IN ('running', 'healthy')`,
-    ).get() as { count: number } | undefined;
-
-    return row?.count ?? 0;
+    return this.params.identity?.address ? 1 : 0;
   }
 
   private getMaxReplans(): number {
@@ -1069,57 +829,6 @@ function taskRowToTaskNode(task: TaskGraphRow): TaskNode {
   };
 }
 
-function parseTaskResultMessage(message: AgentMessage): TaskResultEnvelope | null {
-  const payload = safeJsonParse(message.content);
-  const fallbackTaskId = typeof message.taskId === "string" ? message.taskId : null;
-
-  if (!payload || typeof payload !== "object") {
-    if (!fallbackTaskId) {
-      return null;
-    }
-
-    return {
-      taskId: fallbackTaskId,
-      goalId: message.goalId,
-      result: {
-        success: true,
-        output: message.content,
-        artifacts: [],
-        costCents: 0,
-        duration: 0,
-      },
-    };
-  }
-
-  const obj = payload as Record<string, unknown>;
-  const nested = obj.result && typeof obj.result === "object"
-    ? obj.result as Record<string, unknown>
-    : obj;
-
-  const taskId = firstString(obj.taskId, fallbackTaskId);
-  if (!taskId) {
-    return null;
-  }
-
-  const success = firstBoolean(nested.success, obj.success, true);
-  const output = firstString(nested.output, obj.output, success ? "ok" : "task failed") ?? "";
-
-  const result: TaskResult = {
-    success,
-    output,
-    artifacts: normalizeArtifacts(nested.artifacts ?? obj.artifacts),
-    costCents: firstNumber(nested.costCents, obj.costCents, 0),
-    duration: firstNumber(nested.duration, obj.duration, 0),
-  };
-
-  return {
-    taskId,
-    goalId: message.goalId,
-    result,
-    error: success ? undefined : (firstString(obj.error, output) ?? undefined),
-  };
-}
-
 function pickGoal(goals: GoalRow[], preferredId: string | null): GoalRow {
   if (preferredId) {
     const preferred = goals.find((goal) => goal.id === preferredId);
@@ -1166,44 +875,6 @@ function safeJsonParse(raw: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
-}
-
-function normalizeArtifacts(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value.filter((item): item is string => typeof item === "string");
-}
-
-function firstString(...values: unknown[]): string | null {
-  for (const value of values) {
-    if (typeof value === "string" && value.length > 0) {
-      return value;
-    }
-  }
-
-  return null;
-}
-
-function firstBoolean(...values: unknown[]): boolean {
-  for (const value of values) {
-    if (typeof value === "boolean") {
-      return value;
-    }
-  }
-
-  return false;
-}
-
-function firstNumber(...values: unknown[]): number {
-  for (const value of values) {
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return value;
-    }
-  }
-
-  return 0;
 }
 
 function asPhase(value: unknown): ExecutionPhase | null {

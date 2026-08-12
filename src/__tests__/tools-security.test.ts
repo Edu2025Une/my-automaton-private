@@ -37,7 +37,6 @@ describe("Tool Risk Level Classification", () => {
   // Expected risk classifications
   const EXPECTED_RISK_LEVELS: Record<string, RiskLevel> = {
     // Safe tools (read-only, no side effects)
-    list_sandboxes: "safe",
     read_file: "safe",
     system_synopsis: "safe",
     heartbeat_ping: "safe",
@@ -47,9 +46,6 @@ describe("Tool Risk Level Classification", () => {
     git_log: "safe",
     discover_agents: "safe",
     check_reputation: "safe",
-    list_children: "safe",
-    check_child_status: "safe",
-    verify_child_constitution: "safe",
     list_models: "safe",
 
     // Caution tools (side effects but generally safe)
@@ -57,7 +53,6 @@ describe("Tool Risk Level Classification", () => {
     write_file: "caution",
     expose_port: "caution",
     remove_port: "caution",
-    create_sandbox: "caution",
     review_upstream_changes: "caution",
     modify_heartbeat: "caution",
     sleep: "caution",
@@ -68,12 +63,8 @@ describe("Tool Risk Level Classification", () => {
     git_clone: "caution",
     update_agent_card: "caution",
     switch_model: "caution",
-    start_child: "caution",
-    message_child: "caution",
-    prune_dead_children: "caution",
 
     // Dangerous tools (significant side effects)
-    delete_sandbox: "dangerous",
     edit_own_file: "dangerous",
     install_npm_package: "dangerous",
     pull_upstream: "dangerous",
@@ -84,8 +75,6 @@ describe("Tool Risk Level Classification", () => {
     remove_skill: "dangerous",
     register_erc8004: "dangerous",
     give_feedback: "dangerous",
-    spawn_child: "dangerous",
-    fund_child: "dangerous",
     distress_signal: "dangerous",
   };
 

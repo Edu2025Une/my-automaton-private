@@ -11,8 +11,6 @@ import type {
   ConwayClient,
   ExecResult,
   PortInfo,
-  SandboxInfo,
-  CreateSandboxOptions,
   DomainSearchResult,
   DomainRegistration,
   DnsRecord,
@@ -136,24 +134,6 @@ export class MockConwayClient implements ConwayClient {
 
   async removePort(_port: number): Promise<void> {}
 
-  async createSandbox(_options: CreateSandboxOptions): Promise<SandboxInfo> {
-    return {
-      id: "new-sandbox-id",
-      status: "running",
-      region: "us-east",
-      vcpu: 1,
-      memoryMb: 512,
-      diskGb: 1,
-      createdAt: new Date().toISOString(),
-    };
-  }
-
-  async deleteSandbox(_id: string): Promise<void> {}
-
-  async listSandboxes(): Promise<SandboxInfo[]> {
-    return [];
-  }
-
   async searchDomains(_query: string, _tlds?: string): Promise<DomainSearchResult[]> {
     return [{ domain: "test.com", available: true, registrationPrice: 1200, currency: "USD" }];
   }
@@ -198,10 +178,6 @@ export class MockConwayClient implements ConwayClient {
     return { automaton: {} };
   }
 
-  createScopedClient(_targetSandboxId: string): ConwayClient {
-    // Return self so spies on exec/writeFile propagate to scoped clients
-    return this;
-  }
 }
 
 // ─── Mock Metrics Collector ──────────────────────────────────────
@@ -301,7 +277,6 @@ export function createTestConfig(
     walletAddress: "0x1234567890abcdef1234567890abcdef12345678" as `0x${string}`,
     version: "0.2.1",
     skillsDir: "/tmp/test-skills",
-    maxChildren: 3,
     maxTurnsPerCycle: 25,
     ...overrides,
   };

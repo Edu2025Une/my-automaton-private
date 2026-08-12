@@ -152,7 +152,6 @@ export function createConfig(params: {
     walletAddress: params.walletAddress || "local://standalone",
     version: DEFAULT_CONFIG.version || "0.2.1",
     skillsDir: DEFAULT_CONFIG.skillsDir || "~/.automaton/skills",
-    maxChildren: DEFAULT_CONFIG.maxChildren || 3,
     parentAddress: params.parentAddress,
     treasuryPolicy: params.treasuryPolicy ?? DEFAULT_TREASURY_POLICY,
     chainType: params.chainType || "evm",

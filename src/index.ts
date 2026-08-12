@@ -138,7 +138,6 @@ async function showStatus(): Promise<void> {
   const tools = db.getInstalledTools();
   const heartbeats = db.getHeartbeatEntries();
   const skills = db.getSkills(true);
-  const children = db.getChildren();
   const registry = db.getRegistryEntry();
 
   logger.info(`
@@ -152,7 +151,6 @@ Turns:      ${turnCount}
 Tools:      ${tools.length} installed
 Skills:     ${skills.length} active
 Heartbeats: ${heartbeats.filter((h) => h.enabled).length} active
-Children:   ${children.filter((c) => c.status !== "dead").length} alive / ${children.length} total
 Agent ID:   ${registry?.agentId || "not registered"}
 Model:      ${config.inferenceModel}
 Version:    ${config.version}

@@ -1,9 +1,6 @@
 const IDLE_ONLY_TOOL_NAMES = [
   "system_synopsis",
   "review_memory",
-  "list_children",
-  "check_child_status",
-  "list_sandboxes",
   "list_models",
   "list_skills",
   "git_status",
