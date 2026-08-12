@@ -138,7 +138,6 @@ async function showStatus(): Promise<void> {
   const tools = db.getInstalledTools();
   const heartbeats = db.getHeartbeatEntries();
   const skills = db.getSkills(true);
-  const registry = db.getRegistryEntry();
 
   logger.info(`
 === AUTOMATON STATUS ===
@@ -151,7 +150,6 @@ Turns:      ${turnCount}
 Tools:      ${tools.length} installed
 Skills:     ${skills.length} active
 Heartbeats: ${heartbeats.filter((h) => h.enabled).length} active
-Agent ID:   ${registry?.agentId || "not registered"}
 Model:      ${config.inferenceModel}
 Version:    ${config.version}
 ========================

@@ -555,7 +555,7 @@ describe("Tool risk classifications", () => {
       "read_file", "heartbeat_ping", "system_synopsis",
       "list_models", "system_synopsis", "list_skills",
       "git_status", "git_diff", "git_log",
-      "check_reputation", "discover_agents", "heartbeat_ping",
+      "heartbeat_ping",
       "search_domains", "manage_dns",
     ];
     for (const name of expectedSafe) {
@@ -572,7 +572,7 @@ describe("Tool risk classifications", () => {
       "install_mcp_server", "install_skill", "create_skill", "remove_skill",
       "register_domain",
       "update_genesis_prompt",
-      "register_erc8004", "give_feedback", "distress_signal",
+      "distress_signal",
     ];
     for (const name of expectedDangerous) {
       const tool = tools.find((t) => t.name === name);

@@ -39,15 +39,22 @@ export function hadLegacyConwayMode(config?: Partial<AutomatonConfig> | null): b
 }
 
 export function disableConwayRuntimeFields<T extends Partial<AutomatonConfig>>(config: T): T {
-  const { socialRelayUrl: _legacySocialRelayUrl, ...rest } =
-    config as T & { socialRelayUrl?: unknown };
+  const {
+    socialRelayUrl: _legacySocialRelayUrl,
+    registeredWithConway: _legacyRegisteredWithConway,
+    conwayApiUrl: _legacyConwayApiUrl,
+    conwayApiKey: _legacyConwayApiKey,
+    ...rest
+  } = config as T & {
+    socialRelayUrl?: unknown;
+    registeredWithConway?: unknown;
+    conwayApiUrl?: unknown;
+    conwayApiKey?: unknown;
+  };
   return {
     ...rest,
     runtimeMode: "standalone",
-    registeredWithConway: false,
     sandboxId: "",
-    conwayApiUrl: "",
-    conwayApiKey: "",
   } as T;
 }
 
@@ -94,12 +101,9 @@ export function containsConwayUrl(value: unknown): boolean {
 }
 
 export function getStandaloneBootstrapExternalUrls(
-  config: Partial<AutomatonConfig>,
+  _config: Partial<AutomatonConfig>,
 ): string[] {
-  const candidates = [
-    config.conwayApiUrl,
-  ];
-  return candidates.filter((value): value is string => containsConwayUrl(value));
+  return [];
 }
 
 export function createStandaloneConwayClient(): ConwayClient {
@@ -123,6 +127,5 @@ export function createStandaloneConwayClient(): ConwayClient {
     addDnsRecord: async (): Promise<DnsRecord> => disabled(),
     deleteDnsRecord: async () => disabled(),
     listModels: async (): Promise<ModelInfo[]> => disabled(),
-    registerAutomaton: async () => disabled(),
   };
 }

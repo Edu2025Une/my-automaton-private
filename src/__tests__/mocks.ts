@@ -165,19 +165,6 @@ export class MockConwayClient implements ConwayClient {
     ];
   }
 
-  async registerAutomaton(_params: {
-    automatonId: string;
-    automatonAddress: import("viem").Address;
-    creatorAddress: import("viem").Address;
-    name: string;
-    bio?: string;
-    genesisPromptHash?: `0x${string}`;
-    account: import("viem").PrivateKeyAccount;
-    nonce?: string;
-  }): Promise<{ automaton: Record<string, unknown> }> {
-    return { automaton: {} };
-  }
-
 }
 
 // ─── Mock Metrics Collector ──────────────────────────────────────
@@ -265,10 +252,7 @@ export function createTestConfig(
     runtimeMode: "standalone",
     genesisPrompt: "You are a test automaton.",
     creatorAddress: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd" as `0x${string}`,
-    registeredWithConway: false,
     sandboxId: "",
-    conwayApiUrl: "",
-    conwayApiKey: "",
     inferenceModel: "mock-model",
     maxTokensPerTurn: 4096,
     heartbeatConfigPath: "/tmp/test-heartbeat.yml",

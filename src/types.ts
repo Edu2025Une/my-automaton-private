@@ -32,12 +32,6 @@ export interface WalletData {
   chainType?: ChainType;
 }
 
-export interface ProvisionResult {
-  apiKey: string;
-  walletAddress: string;
-  keyPrefix: string;
-}
-
 // ─── Configuration ───────────────────────────────────────────────
 
 export interface AutomatonConfig {
@@ -46,10 +40,7 @@ export interface AutomatonConfig {
   genesisPrompt: string;
   creatorMessage?: string;
   creatorAddress: string;
-  registeredWithConway: boolean;
   sandboxId: string;
-  conwayApiUrl: string;
-  conwayApiKey: string;
   openaiApiKey?: string;
   anthropicApiKey?: string;
   ollamaBaseUrl?: string;
@@ -78,8 +69,6 @@ export type RuntimeMode = "standalone";
 
 export const DEFAULT_CONFIG: Partial<AutomatonConfig> = {
   runtimeMode: "standalone",
-  conwayApiUrl: "",
-  conwayApiKey: "",
   sandboxId: "",
   inferenceModel: "gpt-5.2",
   maxTokensPerTurn: 4096,
@@ -158,7 +147,6 @@ export type ToolCategory =
   | "survival"
   | "skills"
   | "git"
-  | "registry"
   | "memory";
 
 export interface ToolContext {
@@ -351,18 +339,6 @@ export interface ConwayClient {
   readFile(path: string): Promise<string>;
   exposePort(port: number): Promise<PortInfo>;
   removePort(port: number): Promise<void>;
-  registerAutomaton(params: {
-    automatonId: string;
-    automatonAddress: string;
-    creatorAddress: string;
-    name: string;
-    bio?: string;
-    genesisPromptHash?: `0x${string}`;
-    account: PrivateKeyAccount;
-    nonce?: string;
-    chainType?: ChainType;
-    chainIdentity?: ChainIdentity;
-  }): Promise<{ automaton: Record<string, unknown> }>;
   // Domain operations
   searchDomains(query: string, tlds?: string): Promise<DomainSearchResult[]>;
   registerDomain(domain: string, years?: number): Promise<DomainRegistration>;
@@ -632,14 +608,6 @@ export interface AutomatonDatabase {
   insertChild(child: ChildAutomaton): void;
   updateChildStatus(id: string, status: ChildStatus): void;
 
-  // Registry
-  getRegistryEntry(): RegistryEntry | undefined;
-  setRegistryEntry(entry: RegistryEntry): void;
-
-  // Reputation
-  insertReputation(entry: ReputationEntry): void;
-  getReputation(agentAddress?: string): ReputationEntry[];
-
   // Inbox
   insertInboxMessage(msg: InboxMessage): void;
   getUnprocessedInboxMessages(limit: number): InboxMessage[];
@@ -724,41 +692,6 @@ export interface GitLogEntry {
   message: string;
   author: string;
   date: string;
-}
-
-// ─── ERC-8004 Registry ─────────────────────────────────────────
-
-export interface AgentCard {
-  type: string;
-  name: string;
-  description: string;
-  services: AgentService[];
-  active: boolean;
-  parentAgent?: string;
-}
-
-export interface AgentService {
-  name: string;
-  endpoint: string;
-}
-
-export interface RegistryEntry {
-  agentId: string;
-  agentURI: string;
-  chain: string;
-  contractAddress: string;
-  txHash: string;
-  registeredAt: string;
-}
-
-export interface ReputationEntry {
-  id: string;
-  fromAgent: string;
-  toAgent: string;
-  score: number;
-  comment: string;
-  txHash?: string;
-  timestamp: string;
 }
 
 export interface DiscoveredAgent {
@@ -1290,45 +1223,6 @@ export const DEFAULT_GENESIS_LIMITS: GenesisLimits = {
   maxMessageLength: 2000,
   maxGenesisPromptLength: 16000,
 };
-
-// === Phase 3.2: Social & Registry Types ===
-export interface DiscoveryConfig {
-  ipfsGateway: string; // default: "https://ipfs.io"
-  maxScanCount: number; // default: 100
-  maxConcurrentFetches: number; // default: 5
-  maxCardSizeBytes: number; // default: 64000
-  fetchTimeoutMs: number; // default: 10000
-}
-
-export const DEFAULT_DISCOVERY_CONFIG: DiscoveryConfig = {
-  ipfsGateway: "https://ipfs.io",
-  maxScanCount: 100,
-  maxConcurrentFetches: 5,
-  maxCardSizeBytes: 64_000,
-  fetchTimeoutMs: 10_000,
-};
-
-export interface OnchainTransactionRow {
-  id: string; // ULID
-  txHash: string;
-  chain: string;
-  operation: string;
-  status: "pending" | "confirmed" | "failed";
-  gasUsed: number | null;
-  metadata: string; // JSON
-  createdAt: string;
-}
-
-export interface DiscoveredAgentCacheRow {
-  agentAddress: string; // PRIMARY KEY
-  agentCard: string; // JSON AgentCard
-  fetchedFrom: string; // URI
-  cardHash: string;
-  validUntil: string | null;
-  fetchCount: number;
-  lastFetchedAt: string;
-  createdAt: string;
-}
 
 // === Phase 4.1: Observability Types ===
 

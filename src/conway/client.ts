@@ -13,8 +13,6 @@ import type {
   ConwayClient,
   ExecResult,
   PortInfo,
-  CreateSandboxOptions,
-  SandboxInfo,
   DomainSearchResult,
   DomainRegistration,
   DnsRecord,
@@ -22,10 +20,7 @@ import type {
 } from "../types.js";
 import { ResilientHttpClient } from "../infrastructure/http/resilient-http-client.js";
 import { ulid } from "ulid";
-import { keccak256, toHex } from "viem";
-import type { Address, PrivateKeyAccount } from "viem";
-import { randomUUID } from "crypto";
-import type { ChainType, ChainIdentity } from "../identity/chain.js";
+import type { Address } from "viem";
 
 interface ConwayClientOptions {
   apiUrl: string;
@@ -85,21 +80,6 @@ export function createConwayClient(options: ConwayClientOptions): ConwayClient {
 
     throw new Error("Unreachable");
   }
-
-  const canonicalizePayload = (payload: Record<string, string>): string => {
-    const sortedKeys = Object.keys(payload).sort();
-    const sorted: Record<string, string> = {};
-    for (const key of sortedKeys) {
-      sorted[key] = payload[key];
-    }
-    return JSON.stringify(sorted);
-  };
-
-  const hashIdentityPayload = (payload: Record<string, string>): `0x${string}` => {
-    const canonical = canonicalizePayload(payload);
-    return keccak256(toHex(canonical));
-  };
-
 
   // ─── Sandbox Operations (own sandbox) ────────────────────────
   // When sandboxId is empty, automatically fall back to local execution.
@@ -245,98 +225,6 @@ export function createConwayClient(options: ConwayClientOptions): ConwayClient {
     await request("DELETE", `/v1/sandboxes/${sandboxId}/ports/${port}`);
   };
 
-  const registerAutomaton = async (params: {
-    automatonId: string;
-    automatonAddress: string;
-    creatorAddress: string;
-    name: string;
-    bio?: string;
-    genesisPromptHash?: `0x${string}`;
-    account: PrivateKeyAccount;
-    nonce?: string;
-    chainType?: ChainType;
-    chainIdentity?: ChainIdentity;
-  }): Promise<{ automaton: Record<string, unknown> }> => {
-    const {
-      automatonId,
-      automatonAddress,
-      creatorAddress,
-      name,
-      bio,
-      genesisPromptHash,
-      account,
-      chainIdentity,
-    } = params;
-    const nonce = params.nonce ?? randomUUID();
-    const isSolana = params.chainType === "solana";
-
-    const payload: Record<string, string> = {
-      automaton_id: automatonId,
-      automaton_address: automatonAddress,
-      creator_address: creatorAddress,
-      name,
-      bio: bio || "",
-    };
-    if (genesisPromptHash) {
-      payload.genesis_prompt_hash = genesisPromptHash;
-    }
-
-    const payloadHash = hashIdentityPayload(payload);
-    let signature: string;
-
-    if (isSolana && chainIdentity) {
-      // Solana path: Ed25519 sign of canonical JSON
-      const sigMessage = JSON.stringify({ automatonId, nonce, payloadHash });
-      signature = await chainIdentity.signMessage(sigMessage);
-    } else if (isSolana && !chainIdentity) {
-      throw new Error("Solana registration requires chainIdentity. Pass the ChainIdentity from getWallet().");
-    } else {
-      // EVM path: EIP-712 typed data (unchanged)
-      const domain = {
-        name: "AIWS Automaton",
-        version: "1",
-        chainId: 8453,
-      };
-      const types = {
-        Register: [
-          { name: "automatonId", type: "string" },
-          { name: "nonce", type: "string" },
-          { name: "payloadHash", type: "bytes32" },
-        ],
-      };
-      const message = {
-        automatonId,
-        nonce,
-        payloadHash,
-      };
-      signature = await account.signTypedData({
-        domain,
-        types,
-        primaryType: "Register",
-        message,
-      });
-    }
-
-    const body: Record<string, unknown> = {
-      automaton_id: automatonId,
-      automaton_address: automatonAddress,
-      creator_address: creatorAddress,
-      name,
-      bio: bio || "",
-      nonce,
-      signature,
-      payload_hash: payloadHash,
-    };
-    if (genesisPromptHash) {
-      body.genesis_prompt_hash = genesisPromptHash;
-    }
-    if (isSolana) {
-      body.chain_type = "solana";
-    }
-
-    return request("POST", "/v1/automatons/register", body);
-  };
-
   // ─── Domains ──────────────────────────────────────────────────
 
   const searchDomains = async (
@@ -464,7 +352,6 @@ export function createConwayClient(options: ConwayClientOptions): ConwayClient {
     readFile,
     exposePort,
     removePort,
-    registerAutomaton,
     searchDomains,
     registerDomain,
     listDnsRecords,

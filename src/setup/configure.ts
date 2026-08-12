@@ -196,10 +196,7 @@ async function configureProviders(config: AutomatonConfig): Promise<void> {
   console.log(chalk.cyan("\n  ── Inference Providers ─────────────────────────\n"));
   console.log(chalk.dim("  Press Enter to keep the current value. Type - to clear an optional field.\n"));
 
-  config.conwayApiKey = "";
-  config.conwayApiUrl = "";
   config.sandboxId = "";
-  config.registeredWithConway = false;
 
   config.openaiApiKey = await askString("OpenAI API key  (sk-...)", config.openaiApiKey) || undefined;
   config.anthropicApiKey = await askString("Anthropic API key  (sk-ant-...)", config.anthropicApiKey) || undefined;

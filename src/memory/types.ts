@@ -51,8 +51,6 @@ const STRATEGIC_TOOLS = new Set([
   "update_genesis_prompt",
   "edit_own_file",
   "modify_heartbeat",
-  "register_erc8004",
-  "update_agent_card",
   "install_mcp_server",
   "update_soul",
 ]);
@@ -75,7 +73,6 @@ const PRODUCTIVE_TOOLS = new Set([
 ]);
 
 const COMMUNICATION_TOOLS = new Set([
-  "give_feedback",
   "note_about_agent",
 ]);
 
@@ -85,14 +82,12 @@ const MAINTENANCE_TOOLS = new Set([
   "list_sandboxes",
   "list_skills",
   "list_models",
-  "check_reputation",
   "git_status",
   "git_log",
   "git_diff",
   "review_memory",
   "recall_facts",
   "recall_procedure",
-  "discover_agents",
   "search_domains",
 ]);
 

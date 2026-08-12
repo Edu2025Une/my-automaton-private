@@ -707,62 +707,6 @@ describe("Agent Loop", () => {
     expect(enforcementTurn).toBeUndefined();
   });
 
-  it("discover_agents turns are retained in context (not classified as idle)", { timeout: 180_000 }, async () => {
-    // A turn with only discover_agents should NOT trigger maintenance loop detection
-    // because discover_agents is no longer in IDLE_ONLY_TOOLS
-    function discoverResponse(uid: string): ReturnType<typeof toolCallResponse> {
-      return {
-        id: `resp_${uid}`,
-        model: "mock-model",
-        message: {
-          role: "assistant",
-          content: "",
-          tool_calls: [{
-            id: `call_${uid}`,
-            type: "function" as const,
-            function: { name: "discover_agents", arguments: JSON.stringify({ limit: 15 }) },
-          }],
-        },
-        toolCalls: [{
-          id: `call_${uid}`,
-          type: "function" as const,
-          function: { name: "discover_agents", arguments: JSON.stringify({ limit: 15 }) },
-        }],
-        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
-        finishReason: "tool_calls",
-      };
-    }
-
-    const inference = new MockInferenceClient([
-      discoverResponse("d1"),
-      discoverResponse("d2"),
-      discoverResponse("d3"), // Would trigger maintenance loop if discover_agents were idle
-      noToolResponse("Processing discovery results."),
-    ]);
-
-    const turns: AgentTurn[] = [];
-
-    await runAgentLoop({
-      identity,
-      config,
-      db,
-      conway,
-      inference,
-      onTurnComplete: (turn) => turns.push(turn),
-    });
-
-    // No maintenance loop detection should fire since discover_agents is NOT idle
-    const maintenanceTurn = turns.find(
-      (t) => t.input?.includes("MAINTENANCE LOOP DETECTED"),
-    );
-    expect(maintenanceTurn).toBeUndefined();
-
-    // But the repetitive pattern detector SHOULD fire (3 identical patterns)
-    const loopWarning = turns.find(
-      (t) => t.input?.includes("LOOP DETECTED"),
-    );
-    expect(loopWarning).toBeDefined();
-  });
 
   it("read_file turns are retained in context (not classified as idle)", async () => {
     conway.files["/tmp/one.txt"] = "one";

@@ -118,7 +118,6 @@ export function createConfig(params: {
   genesisPrompt: string;
   creatorMessage?: string;
   creatorAddress: string;
-  registeredWithConway?: boolean;
   sandboxId?: string;
   walletAddress?: string;
   apiKey?: string;
@@ -136,10 +135,7 @@ export function createConfig(params: {
     genesisPrompt: params.genesisPrompt,
     creatorMessage: params.creatorMessage,
     creatorAddress: params.creatorAddress,
-    registeredWithConway: false,
     sandboxId: "",
-    conwayApiUrl: "",
-    conwayApiKey: "",
     openaiApiKey: params.openaiApiKey,
     anthropicApiKey: params.anthropicApiKey,
     ollamaBaseUrl: params.ollamaBaseUrl,

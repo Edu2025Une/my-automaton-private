@@ -5,7 +5,6 @@ const IDLE_ONLY_TOOL_NAMES = [
   "list_skills",
   "git_status",
   "git_log",
-  "check_reputation",
   "recall_facts",
   "recall_procedure",
   "heartbeat_ping",

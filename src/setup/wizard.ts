@@ -29,7 +29,7 @@ export async function runSetupWizard(): Promise<AutomatonConfig> {
 
   // ─── 2. Standalone runtime ────────────────────────────────────
   console.log(chalk.cyan("  [2/5] Standalone runtime"));
-  console.log(chalk.green("  Remote provisioning skipped. No API key, wallet, credits, or registration required.\n"));
+  console.log(chalk.green("  Remote setup skipped. No API key, wallet, credits, or registration required.\n"));
 
   // ─── 3. Interactive questions ─────────────────────────────────
   console.log(chalk.cyan("  [3/5] Setup questions\n"));
@@ -109,7 +109,6 @@ export async function runSetupWizard(): Promise<AutomatonConfig> {
     name,
     genesisPrompt,
     creatorAddress,
-    registeredWithConway: false,
     sandboxId: env.sandboxId,
     walletAddress,
     apiKey: "",

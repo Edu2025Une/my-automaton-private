@@ -19,8 +19,6 @@ const GENERAL_WRAPPED_TOOL_ALLOWLIST = new Set([
   "list_models",
   "switch_model",
   "check_inference_spending",
-  "discover_agents",
-  "check_reputation",
   "search_domains",
   "register_domain",
   "manage_dns",

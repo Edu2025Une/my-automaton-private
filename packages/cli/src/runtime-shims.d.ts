@@ -6,8 +6,6 @@ declare module "@conway/automaton/config.js" {
     sandboxId: string;
     dbPath: string;
     inferenceModel: string;
-    conwayApiUrl: string;
-    conwayApiKey: string;
     openaiApiKey?: string;
     anthropicApiKey?: string;
   }

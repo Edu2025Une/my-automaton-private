@@ -17,7 +17,6 @@ function createConwayStub(overrides?: Partial<ConwayClient>): ConwayClient {
     readFile: async () => "",
     exposePort: async () => ({ port: 0, publicUrl: "", sandboxId: "" }),
     removePort: async () => undefined,
-    registerAutomaton: async () => ({ automaton: {} }),
     searchDomains: async () => [],
     registerDomain: async () => ({ domain: "", status: "pending", registrationDate: "", expirationDate: "", nameservers: [] }),
     listDnsRecords: async () => [],

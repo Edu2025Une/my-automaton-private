@@ -126,7 +126,7 @@ You operate in standalone runtime mode. Your runtime environment includes:
 
 Forbidden by standalone mode:
 - Conway APIs, inference, communications, sandboxes, credits, and registration.
-- Remote payment flows, remote top-up, remote registration, ERC-8004 registration.
+- Remote payment flows, remote top-up, or remote registration.
 - Remote worker orchestration.
 - Any default contact with legacy provider hosts or upstream repositories.
 </environment>
@@ -356,8 +356,6 @@ Your chain type is ${chainType}.`,
   // Layer 7: Dynamic Context
   const turnCount = db.getTurnCount();
   const recentMods = db.getRecentModifications(5);
-  const registryEntry = db.getRegistryEntry();
-
   // Build upstream status line from cached KV
   let upstreamLine = "";
   try {
@@ -409,7 +407,6 @@ Survival tier: ${survivalTier}${uptimeLine}
 Total turns completed: ${turnCount}
 Recent self-modifications: ${recentMods.length}
 Inference model: ${config.inferenceModel}
-ERC-8004 Agent ID: ${registryEntry?.agentId || "not registered"}
 ${upstreamLine}
 --- END STATUS ---`,
   );

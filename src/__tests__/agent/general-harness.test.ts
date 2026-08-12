@@ -107,7 +107,7 @@ describe("agent/GeneralHarness", () => {
     expect(toolNames.has("write_file")).toBe(true);
     expect(toolNames.has("read_file")).toBe(true);
     expect(toolNames.has("heartbeat_ping")).toBe(true);
-    expect(toolNames.has("discover_agents")).toBe(true);
+    expect(toolNames.has("discover_agents")).toBe(false);
     expect(toolNames.has("web_fetch")).toBe(true);
     expect(toolNames.has("task_done")).toBe(true);
     expect(toolNames.has("send_message")).toBe(false);

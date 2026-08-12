@@ -23,8 +23,6 @@ import type {
   Skill,
   ChildAutomaton,
   ChildStatus,
-  RegistryEntry,
-  ReputationEntry,
   InboxMessage,
 } from "../types.js";
 import {
@@ -66,8 +64,6 @@ import type {
   RelationshipMemoryEntry,
   ChildLifecycleEventRow,
   ChildLifecycleState,
-  OnchainTransactionRow,
-  DiscoveredAgentCacheRow,
   MetricSnapshotRow,
 } from "../types.js";
 import { ulid } from "ulid";
@@ -417,54 +413,6 @@ export function createDatabase(dbPath: string): AutomatonDatabase {
     ).run(status, id);
   };
 
-  // ─── Registry ──────────────────────────────────────────────
-
-  const getRegistryEntry = (): RegistryEntry | undefined => {
-    const row = db
-      .prepare("SELECT * FROM registry LIMIT 1")
-      .get() as any | undefined;
-    return row ? deserializeRegistry(row) : undefined;
-  };
-
-  const setRegistryEntry = (entry: RegistryEntry): void => {
-    db.prepare(
-      `INSERT OR REPLACE INTO registry (agent_id, agent_uri, chain, contract_address, tx_hash, registered_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run(
-      entry.agentId,
-      entry.agentURI,
-      entry.chain,
-      entry.contractAddress,
-      entry.txHash,
-      entry.registeredAt,
-    );
-  };
-
-  // ─── Reputation ────────────────────────────────────────────
-
-  const insertReputation = (entry: ReputationEntry): void => {
-    db.prepare(
-      `INSERT INTO reputation (id, from_agent, to_agent, score, comment, tx_hash)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run(
-      entry.id,
-      entry.fromAgent,
-      entry.toAgent,
-      entry.score,
-      entry.comment,
-      entry.txHash ?? null,
-    );
-  };
-
-  const getReputation = (agentAddress?: string): ReputationEntry[] => {
-    const query = agentAddress
-      ? "SELECT * FROM reputation WHERE to_agent = ? ORDER BY created_at DESC"
-      : "SELECT * FROM reputation ORDER BY created_at DESC";
-    const params = agentAddress ? [agentAddress] : [];
-    const rows = db.prepare(query).all(...params) as any[];
-    return rows.map(deserializeReputation);
-  };
-
   // ─── Inbox Messages ──────────────────────────────────────────
 
   const insertInboxMessage = (msg: InboxMessage): void => {
@@ -549,10 +497,6 @@ export function createDatabase(dbPath: string): AutomatonDatabase {
     getChildById,
     insertChild,
     updateChildStatus,
-    getRegistryEntry,
-    setRegistryEntry,
-    insertReputation,
-    getReputation,
     insertInboxMessage,
     getUnprocessedInboxMessages,
     markInboxMessageProcessed,
@@ -1605,17 +1549,6 @@ function deserializeChild(row: any): ChildAutomaton {
   };
 }
 
-function deserializeRegistry(row: any): RegistryEntry {
-  return {
-    agentId: row.agent_id,
-    agentURI: row.agent_uri,
-    chain: row.chain,
-    contractAddress: row.contract_address,
-    txHash: row.tx_hash,
-    registeredAt: row.registered_at,
-  };
-}
-
 function deserializeInboxMessage(row: any): InboxMessage {
   return {
     id: row.id,
@@ -1625,18 +1558,6 @@ function deserializeInboxMessage(row: any): InboxMessage {
     signedAt: row.received_at,
     createdAt: row.received_at,
     replyTo: row.reply_to ?? undefined,
-  };
-}
-
-function deserializeReputation(row: any): ReputationEntry {
-  return {
-    id: row.id,
-    fromAgent: row.from_agent,
-    toAgent: row.to_agent,
-    score: row.score,
-    comment: row.comment,
-    txHash: row.tx_hash ?? undefined,
-    timestamp: row.created_at,
   };
 }
 
@@ -2369,123 +2290,6 @@ function deserializeLifecycleEventRow(row: any): ChildLifecycleEventRow {
     fromState: row.from_state,
     toState: row.to_state,
     reason: row.reason ?? null,
-    metadata: row.metadata ?? "{}",
-    createdAt: row.created_at,
-  };
-}
-
-// ─── Phase 3.2: Agent Cache DB Helpers ──────────────────────────
-
-export function agentCacheUpsert(db: DatabaseType, row: DiscoveredAgentCacheRow): void {
-  db.prepare(
-    `INSERT INTO discovered_agents_cache
-     (agent_address, agent_card, fetched_from, card_hash, valid_until, fetch_count, last_fetched_at, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(agent_address) DO UPDATE SET
-       agent_card = excluded.agent_card,
-       fetched_from = excluded.fetched_from,
-       card_hash = excluded.card_hash,
-       valid_until = excluded.valid_until,
-       fetch_count = fetch_count + 1,
-       last_fetched_at = excluded.last_fetched_at`,
-  ).run(
-    row.agentAddress,
-    row.agentCard,
-    row.fetchedFrom,
-    row.cardHash,
-    row.validUntil,
-    row.fetchCount,
-    row.lastFetchedAt,
-    row.createdAt,
-  );
-}
-
-export function agentCacheGet(db: DatabaseType, agentAddress: string): DiscoveredAgentCacheRow | undefined {
-  const row = db
-    .prepare("SELECT * FROM discovered_agents_cache WHERE agent_address = ?")
-    .get(agentAddress) as any | undefined;
-  return row ? deserializeAgentCacheRow(row) : undefined;
-}
-
-export function agentCacheGetValid(db: DatabaseType): DiscoveredAgentCacheRow[] {
-  const rows = db
-    .prepare("SELECT * FROM discovered_agents_cache WHERE valid_until IS NULL OR valid_until >= datetime('now')")
-    .all() as any[];
-  return rows.map(deserializeAgentCacheRow);
-}
-
-export function agentCachePrune(db: DatabaseType): number {
-  const result = db
-    .prepare("DELETE FROM discovered_agents_cache WHERE valid_until IS NOT NULL AND valid_until < datetime('now')")
-    .run();
-  return result.changes;
-}
-
-function deserializeAgentCacheRow(row: any): DiscoveredAgentCacheRow {
-  return {
-    agentAddress: row.agent_address,
-    agentCard: row.agent_card,
-    fetchedFrom: row.fetched_from,
-    cardHash: row.card_hash,
-    validUntil: row.valid_until ?? null,
-    fetchCount: row.fetch_count,
-    lastFetchedAt: row.last_fetched_at,
-    createdAt: row.created_at,
-  };
-}
-
-// ─── Phase 3.2: Onchain Transaction DB Helpers ──────────────────
-
-export function onchainTxInsert(db: DatabaseType, row: OnchainTransactionRow): void {
-  db.prepare(
-    `INSERT INTO onchain_transactions (id, tx_hash, chain, operation, status, gas_used, metadata, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    row.id,
-    row.txHash,
-    row.chain,
-    row.operation,
-    row.status,
-    row.gasUsed,
-    row.metadata,
-    row.createdAt,
-  );
-}
-
-export function onchainTxGetByHash(db: DatabaseType, txHash: string): OnchainTransactionRow | undefined {
-  const row = db
-    .prepare("SELECT * FROM onchain_transactions WHERE tx_hash = ?")
-    .get(txHash) as any | undefined;
-  return row ? deserializeOnchainTxRow(row) : undefined;
-}
-
-export function onchainTxGetAll(db: DatabaseType, filter?: { status?: string }): OnchainTransactionRow[] {
-  if (filter?.status) {
-    const rows = db
-      .prepare("SELECT * FROM onchain_transactions WHERE status = ? ORDER BY created_at DESC")
-      .all(filter.status) as any[];
-    return rows.map(deserializeOnchainTxRow);
-  }
-  const rows = db
-    .prepare("SELECT * FROM onchain_transactions ORDER BY created_at DESC")
-    .all() as any[];
-  return rows.map(deserializeOnchainTxRow);
-}
-
-export function onchainTxUpdateStatus(db: DatabaseType, txHash: string, status: string, gasUsed?: number): void {
-  db.prepare(
-    "UPDATE onchain_transactions SET status = ?, gas_used = COALESCE(?, gas_used) WHERE tx_hash = ?",
-  ).run(status, gasUsed ?? null, txHash);
-}
-
-function deserializeOnchainTxRow(row: any): OnchainTransactionRow {
-  return {
-    id: row.id,
-    txHash: row.tx_hash,
-    chain: row.chain,
-    operation: row.operation,
-    status: row.status,
-    gasUsed: row.gas_used ?? null,
     metadata: row.metadata ?? "{}",
     createdAt: row.created_at,
   };

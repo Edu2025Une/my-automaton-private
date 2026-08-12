@@ -32,10 +32,10 @@ describe("standalone runtime mode", () => {
     } as any);
 
     expect(config.runtimeMode).toBe("standalone");
-    expect(config.registeredWithConway).toBe(false);
     expect(config.sandboxId).toBe("");
-    expect(config.conwayApiUrl).toBe("");
-    expect(config.conwayApiKey).toBe("");
+    expect("registeredWithConway" in config).toBe(false);
+    expect("conwayApiUrl" in config).toBe(false);
+    expect("conwayApiKey" in config).toBe(false);
     expect((config as any).socialRelayUrl).toBeUndefined();
   });
 
@@ -48,14 +48,14 @@ describe("standalone runtime mode", () => {
     });
 
     expect(config.runtimeMode).toBe("standalone");
-    expect(config.conwayApiKey).toBe("");
-    expect(config.conwayApiUrl).toBe("");
     expect(config.sandboxId).toBe("");
+    expect("conwayApiKey" in config).toBe(false);
+    expect("conwayApiUrl" in config).toBe(false);
     expect((config as any).socialRelayUrl).toBeUndefined();
     expect(getStandaloneBootstrapExternalUrls(config)).toEqual([]);
   });
 
-  it("standalone initialization does not require conwayApiKey when an independent provider is configured", () => {
+  it("standalone initialization does not require Conway credentials when an independent provider is configured", () => {
     const config = createConfig({
       name: "local-agent",
       genesisPrompt: "Work locally.",
@@ -63,7 +63,7 @@ describe("standalone runtime mode", () => {
       openaiApiKey: "test-openai-key",
     });
 
-    expect(config.conwayApiKey).toBe("");
+    expect("conwayApiKey" in config).toBe(false);
     expect(() => assertStandaloneInferenceConfigured(config, {})).not.toThrow();
     expect(getIndependentInferenceProvider(config, {})).toBe("openai");
   });
@@ -135,6 +135,11 @@ describe("standalone runtime mode", () => {
       "message_child",
       "verify_child_constitution",
       "prune_dead_children",
+      "register_erc8004",
+      "update_agent_card",
+      "discover_agents",
+      "give_feedback",
+      "check_reputation",
     ]) {
       const result = await executeTool(removedName, {}, tools, context);
       expect(result.error).toBe(`Unknown tool: ${removedName}`);
@@ -156,6 +161,11 @@ describe("standalone runtime mode", () => {
       "message_child",
       "verify_child_constitution",
       "prune_dead_children",
+      "register_erc8004",
+      "update_agent_card",
+      "discover_agents",
+      "give_feedback",
+      "check_reputation",
     ];
 
     for (const name of removedReplicationTools) {
@@ -201,6 +211,9 @@ describe("standalone runtime mode", () => {
       "../agent/tools.ts",
       "../agent/system-prompt.ts",
       "../orchestration/orchestrator.ts",
+      "../setup/wizard.ts",
+      "../setup/configure.ts",
+      "../standalone.ts",
     ];
     const forbidden = [
       "conway.tech",
@@ -221,6 +234,24 @@ describe("standalone runtime mode", () => {
       "message_child",
       "verify_child_constitution",
       "prune_dead_children",
+      "/v1/auth/nonce",
+      "/v1/auth/verify",
+      "/v1/auth/api-keys",
+      "register-parent",
+      "/v1/automatons/register",
+      "ERC-8004",
+      "erc8004",
+      "register_erc8004",
+      "update_agent_card",
+      "discover_agents",
+      "give_feedback",
+      "check_reputation",
+      "agent-card",
+      "ipfs.io",
+      "AUTOMATON_RPC_URL",
+      "SOLANA_RPC_URL",
+      "getWallet(",
+      "loadWalletAccount(",
     ];
 
     for (const file of files) {

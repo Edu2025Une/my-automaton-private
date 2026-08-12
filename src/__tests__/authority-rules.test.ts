@@ -183,51 +183,6 @@ describe("Authority Rules", () => {
       expect(decision.reasonCode).toBe("EXTERNAL_DANGEROUS_TOOL");
     });
 
-    it("allows register_erc8004 from external input", () => {
-      const rules = createAuthorityRules();
-      const engine = new PolicyEngine(db, rules);
-
-      const tool = createMockTool({
-        name: "register_erc8004",
-        riskLevel: "dangerous",
-        category: "registry",
-      });
-      const request = createRequest(tool, {}, undefined);
-
-      const decision = engine.evaluate(request);
-      expect(decision.action).toBe("allow");
-    });
-
-    it("allows register_erc8004 from heartbeat input", () => {
-      const rules = createAuthorityRules();
-      const engine = new PolicyEngine(db, rules);
-
-      const tool = createMockTool({
-        name: "register_erc8004",
-        riskLevel: "dangerous",
-        category: "registry",
-      });
-      const request = createRequest(tool, {}, "heartbeat");
-
-      const decision = engine.evaluate(request);
-      expect(decision.action).toBe("allow");
-    });
-
-    it("allows give_feedback from external input", () => {
-      const rules = createAuthorityRules();
-      const engine = new PolicyEngine(db, rules);
-
-      const tool = createMockTool({
-        name: "give_feedback",
-        riskLevel: "dangerous",
-        category: "registry",
-      });
-      const request = createRequest(tool, {}, undefined);
-
-      const decision = engine.evaluate(request);
-      expect(decision.action).toBe("allow");
-    });
-
     it("allows destructive tools from agent input", () => {
       const rules = createAuthorityRules();
       const engine = new PolicyEngine(db, rules);

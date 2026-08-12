@@ -17,14 +17,6 @@ import {
 } from "./mocks.js";
 import type { AutomatonDatabase, ToolContext, AutomatonTool, RiskLevel } from "../types.js";
 
-// Mock erc8004.js to avoid ABI parse error
-vi.mock("../registry/erc8004.js", () => ({
-  queryAgent: vi.fn(),
-  getTotalAgents: vi.fn().mockResolvedValue(0),
-  registerAgent: vi.fn(),
-  leaveFeedback: vi.fn(),
-}));
-
 // ─── Risk Level Classification ──────────────────────────────────
 
 describe("Tool Risk Level Classification", () => {
@@ -44,8 +36,6 @@ describe("Tool Risk Level Classification", () => {
     git_status: "safe",
     git_diff: "safe",
     git_log: "safe",
-    discover_agents: "safe",
-    check_reputation: "safe",
     list_models: "safe",
 
     // Caution tools (side effects but generally safe)
@@ -61,7 +51,6 @@ describe("Tool Risk Level Classification", () => {
     git_push: "caution",
     git_branch: "caution",
     git_clone: "caution",
-    update_agent_card: "caution",
     switch_model: "caution",
 
     // Dangerous tools (significant side effects)
@@ -73,8 +62,6 @@ describe("Tool Risk Level Classification", () => {
     install_skill: "dangerous",
     create_skill: "dangerous",
     remove_skill: "dangerous",
-    register_erc8004: "dangerous",
-    give_feedback: "dangerous",
     distress_signal: "dangerous",
   };
 

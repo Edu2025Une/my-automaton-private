@@ -657,16 +657,6 @@ export class MemoryIngestionPipeline {
             source: sessionId,
           });
         }
-
-        if (tc.name === "discover_agents" && tc.result && !tc.result.includes("No agents")) {
-          this.semantic.store({
-            category: "environment",
-            key: "known_agents",
-            value: tc.result.slice(0, 500),
-            confidence: 0.8,
-            source: sessionId,
-          });
-        }
       }
     } catch (error) {
       logger.error("Semantic extraction failed", error instanceof Error ? error : undefined);
