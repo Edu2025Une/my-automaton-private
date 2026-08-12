@@ -12,8 +12,6 @@ import type {
   ExecResult,
   PortInfo,
   SandboxInfo,
-  PricingTier,
-  CreditTransferResult,
   CreateSandboxOptions,
   DomainSearchResult,
   DomainRegistration,
@@ -156,29 +154,6 @@ export class MockConwayClient implements ConwayClient {
 
   async listSandboxes(): Promise<SandboxInfo[]> {
     return [];
-  }
-
-  async getCreditsBalance(): Promise<number> {
-    return this.creditsCents;
-  }
-
-  async getCreditsPricing(): Promise<PricingTier[]> {
-    return [];
-  }
-
-  async transferCredits(
-    toAddress: string,
-    amountCents: number,
-    note?: string,
-  ): Promise<CreditTransferResult> {
-    this.creditsCents -= amountCents;
-    return {
-      transferId: "txn_test",
-      status: "completed",
-      toAddress,
-      amountCents,
-      balanceAfterCents: this.creditsCents,
-    };
   }
 
   async searchDomains(_query: string, _tlds?: string): Promise<DomainSearchResult[]> {

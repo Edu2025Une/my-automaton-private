@@ -15,8 +15,6 @@ import type {
   PortInfo,
   CreateSandboxOptions,
   SandboxInfo,
-  PricingTier,
-  CreditTransferResult,
   DomainSearchResult,
   DomainRegistration,
   DnsRecord,
@@ -291,77 +289,6 @@ export function createConwayClient(options: ConwayClientOptions): ConwayClient {
     }));
   };
 
-  // ─── Credits ─────────────────────────────────────────────────
-
-  const getCreditsBalance = async (): Promise<number> => {
-    const result = await request("GET", "/v1/credits/balance");
-    return result.balance_cents ?? result.credits_cents ?? 0;
-  };
-
-  const getCreditsPricing = async (): Promise<PricingTier[]> => {
-    const result = await request("GET", "/v1/credits/pricing");
-    const tiers = result.tiers || result.pricing || [];
-    return tiers.map((t: any) => ({
-      name: t.name || "",
-      vcpu: t.vcpu || 0,
-      memoryMb: t.memory_mb || 0,
-      diskGb: t.disk_gb || 0,
-      monthlyCents: t.monthly_cents || 0,
-    }));
-  };
-
-  const transferCredits = async (
-    toAddress: string,
-    amountCents: number,
-    note?: string,
-  ): Promise<CreditTransferResult> => {
-    const payload = {
-      to_address: toAddress,
-      amount_cents: amountCents,
-      note,
-    };
-
-    const idempotencyKey = ulid();
-    const paths = ["/v1/credits/transfer", "/v1/credits/transfers"];
-
-    let lastError = "Unknown transfer error";
-
-    for (const path of paths) {
-      const resp = await httpClient.request(`${apiUrl}${path}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: apiKey,
-        },
-        body: JSON.stringify(payload),
-        idempotencyKey,
-        retries: 0, // Mutating: do not auto-retry transfers
-      });
-
-      if (!resp.ok) {
-        const text = await resp.text();
-        lastError = `${resp.status}: ${text}`;
-        // Try next known endpoint shape before failing.
-        if (resp.status === 404) continue;
-        throw new Error(`Conway API error: POST ${path} -> ${lastError}`);
-      }
-
-      const data = await resp.json().catch(() => ({}) as any);
-      return {
-        transferId: data.transfer_id || data.id || "",
-        status: data.status || "submitted",
-        toAddress: data.to_address || toAddress,
-        amountCents: data.amount_cents ?? amountCents,
-        balanceAfterCents:
-          data.balance_after_cents ?? data.new_balance_cents ?? undefined,
-      };
-    }
-
-    throw new Error(
-      `Conway API error: POST /v1/credits/transfer -> ${lastError}`,
-    );
-  };
-
   const registerAutomaton = async (params: {
     automatonId: string;
     automatonAddress: string;
@@ -588,9 +515,6 @@ export function createConwayClient(options: ConwayClientOptions): ConwayClient {
     createSandbox,
     deleteSandbox,
     listSandboxes,
-    getCreditsBalance,
-    getCreditsPricing,
-    transferCredits,
     registerAutomaton,
     searchDomains,
     registerDomain,

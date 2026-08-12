@@ -167,7 +167,7 @@ function createAddressFormatRule(): PolicyRule {
     priority: 100,
     appliesTo: {
       by: "name",
-      names: ["transfer_credits", "send_message", "fund_child"],
+      names: ["send_message", "fund_child"],
     },
     evaluate(request: PolicyRequest): PolicyRuleResult | null {
       const address = (request.args.to_address as string | undefined)

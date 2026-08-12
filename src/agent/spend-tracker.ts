@@ -94,11 +94,6 @@ export class SpendTracker implements SpendTrackerInterface {
     if (category === "transfer") {
       limitHourly = limits.maxHourlyTransferCents;
       limitDaily = limits.maxDailyTransferCents;
-    } else if (category === "x402") {
-      // x402 payments have their own per-payment cap; use a reasonable
-      // hourly/daily envelope derived from the per-payment maximum
-      limitHourly = limits.maxX402PaymentCents * 10;
-      limitDaily = limits.maxX402PaymentCents * 50;
     } else {
       // Derive a meaningful hourly cap from the daily budget.
       // Without this, the entire daily budget could be consumed in one hour.

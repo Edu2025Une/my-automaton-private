@@ -369,13 +369,6 @@ export interface ConwayClient {
   createSandbox(options: CreateSandboxOptions): Promise<SandboxInfo>;
   deleteSandbox(sandboxId: string): Promise<void>;
   listSandboxes(): Promise<SandboxInfo[]>;
-  getCreditsBalance(): Promise<number>;
-  getCreditsPricing(): Promise<PricingTier[]>;
-  transferCredits(
-    toAddress: string,
-    amountCents: number,
-    note?: string,
-  ): Promise<CreditTransferResult>;
   registerAutomaton(params: {
     automatonId: string;
     automatonAddress: string;
@@ -437,22 +430,6 @@ export interface SandboxInfo {
   createdAt: string;
 }
 
-export interface PricingTier {
-  name: string;
-  vcpu: number;
-  memoryMb: number;
-  diskGb: number;
-  monthlyCents: number;
-}
-
-export interface CreditTransferResult {
-  transferId: string;
-  status: string;
-  toAddress: string;
-  amountCents: number;
-  balanceAfterCents?: number;
-}
-
 // ─── Domains ──────────────────────────────────────────────────────
 
 export interface DomainSearchResult {
@@ -500,7 +477,7 @@ export type PolicyAction = 'allow' | 'deny' | 'quarantine';
 export type AuthorityLevel = 'system' | 'agent' | 'external';
 
 // Spend categories
-export type SpendCategory = 'transfer' | 'x402' | 'inference' | 'other';
+export type SpendCategory = 'transfer' | 'inference' | 'other';
 
 export type ToolSelector =
   | { by: 'name'; names: string[] }
@@ -578,8 +555,6 @@ export interface TreasuryPolicy {
   maxHourlyTransferCents: number;
   maxDailyTransferCents: number;
   minimumReserveCents: number;
-  maxX402PaymentCents: number;
-  x402AllowedDomains: string[];
   transferCooldownMs: number;
   maxTransfersPerTurn: number;
   maxInferenceDailyCents: number;
@@ -591,8 +566,6 @@ export const DEFAULT_TREASURY_POLICY: TreasuryPolicy = {
   maxHourlyTransferCents: 10000,
   maxDailyTransferCents: 25000,
   minimumReserveCents: 1000,
-  maxX402PaymentCents: 100,
-  x402AllowedDomains: [],
   transferCooldownMs: 0,
   maxTransfersPerTurn: 2,
   maxInferenceDailyCents: 50000,
@@ -780,7 +753,6 @@ export interface AgentCard {
   name: string;
   description: string;
   services: AgentService[];
-  x402Support: boolean;
   active: boolean;
   parentAgent?: string;
 }
@@ -888,8 +860,8 @@ export const DEFAULT_TOKEN_BUDGET: TokenBudget = {
 export interface TickContext {
   tickId: string;                    // ULID, unique per tick
   startedAt: Date;
-  creditBalance: number;             // fetched once per tick (cents)
-  usdcBalance: number;               // fetched once per tick
+  creditBalance: number;             // local budget signal in cents
+  usdcBalance: number;               // retained for legacy status blocks; always local-only
   survivalTier: SurvivalTier;
   lowComputeMultiplier: number;      // from config
   config: HeartbeatConfig;

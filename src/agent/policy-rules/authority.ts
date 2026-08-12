@@ -50,7 +50,7 @@ function isExternalSource(inputSource: string | undefined): boolean {
  * heartbeat tasks or untrusted external input.
  *
  * Tools NOT on this list (e.g., register_erc8004, give_feedback,
- * edit_own_file, transfer_credits) are allowed from any source because
+ * edit_own_file) are allowed from any source because
  * they are core agent functionality already guarded by other policy rules
  * (financial limits, rate limits, path protection, etc.).
  */

@@ -648,31 +648,11 @@ export class MemoryIngestionPipeline {
         }
 
         // Extract facts from specific tool results
-        if (tc.name === "check_credits" && tc.result) {
-          this.semantic.store({
-            category: "financial",
-            key: "last_known_balance",
-            value: tc.result,
-            confidence: 1.0,
-            source: sessionId,
-          });
-        }
-
         if (tc.name === "system_synopsis" && tc.result) {
           this.semantic.store({
             category: "self",
             key: "system_synopsis",
             value: tc.result.slice(0, 500),
-            confidence: 1.0,
-            source: sessionId,
-          });
-        }
-
-        if (tc.name === "check_usdc_balance" && tc.result) {
-          this.semantic.store({
-            category: "financial",
-            key: "usdc_balance",
-            value: tc.result,
             confidence: 1.0,
             source: sessionId,
           });

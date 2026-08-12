@@ -45,7 +45,6 @@ export function loadConfig(): AutomatonConfig | null {
 
     // Validate all treasury values are positive numbers
     for (const [key, value] of Object.entries(treasuryPolicy)) {
-      if (key === "x402AllowedDomains") continue; // array, not number
       if (typeof value === "number" && (value < 0 || !Number.isFinite(value))) {
         logger.warn(`Invalid treasury value for ${key}: ${value}, using default`);
         (treasuryPolicy as any)[key] = (DEFAULT_TREASURY_POLICY as any)[key];

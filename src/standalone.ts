@@ -8,10 +8,8 @@ import type {
   ExecResult,
   ModelInfo,
   PortInfo,
-  PricingTier,
   RuntimeMode,
   SandboxInfo,
-  CreditTransferResult,
 } from "./types.js";
 import {
   resolveExplicitStandaloneProvider,
@@ -124,9 +122,6 @@ export function createStandaloneConwayClient(): ConwayClient {
     createSandbox: async (_options: CreateSandboxOptions): Promise<SandboxInfo> => disabled(),
     deleteSandbox: async () => disabled(),
     listSandboxes: async (): Promise<SandboxInfo[]> => disabled(),
-    getCreditsBalance: async (): Promise<number> => disabled(),
-    getCreditsPricing: async (): Promise<PricingTier[]> => disabled(),
-    transferCredits: async (): Promise<CreditTransferResult> => disabled(),
     searchDomains: async (): Promise<DomainSearchResult[]> => disabled(),
     registerDomain: async (_domain: string): Promise<DomainRegistration> => disabled(),
     listDnsRecords: async (): Promise<DnsRecord[]> => disabled(),

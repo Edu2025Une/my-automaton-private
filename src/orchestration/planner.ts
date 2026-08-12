@@ -295,7 +295,7 @@ RECEIVE -> ANALYZE -> DECOMPOSE -> VALIDATE -> OUTPUT
 
 <context>
 You have access to (injected at runtime):
-- Current financial state: ${creditsDisplay} credits, ${usdcDisplay} USDC
+- Current local budget state: ${creditsDisplay} credits
 - Survival tier: ${context.survivalTier} (critical/low/stable/comfortable)
 - Available predefined roles: ${roleList} (26 roles across 7 departments)
 - Previously created custom roles: ${customRoleList}

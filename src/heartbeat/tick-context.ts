@@ -2,8 +2,7 @@
  * Tick Context
  *
  * Builds a shared context for each heartbeat tick.
- * Fetches credit balance ONCE per tick, derives survival tier,
- * and shares across all tasks to avoid redundant API calls.
+ * Reads the local credit signal once per tick and derives survival tier.
  */
 
 import type BetterSqlite3 from "better-sqlite3";
@@ -13,8 +12,7 @@ import type {
   HeartbeatConfig,
   TickContext,
 } from "../types.js";
-import { getSurvivalTier } from "../conway/credits.js";
-import { getUsdcBalance } from "../conway/x402.js";
+import { getSurvivalTier } from "../survival/tiers.js";
 import { createLogger } from "../observability/logger.js";
 
 type DatabaseType = BetterSqlite3.Database;
@@ -32,8 +30,8 @@ function generateTickId(): string {
  * Build a TickContext for the current tick.
  *
  * - Generates a unique tickId
- * - Fetches credit balance ONCE via conway.getCreditsBalance()
- * - Fetches USDC balance ONCE via getUsdcBalance()
+ * - Reads local_credit_balance_cents from the local database
+ * - Keeps external token balance at 0; legacy remote balance checks are removed.
  * - Derives survivalTier from credit balance
  * - Reads lowComputeMultiplier from config
  */
@@ -47,23 +45,9 @@ export async function buildTickContext(
   const tickId = generateTickId();
   const startedAt = new Date();
 
-  // Fetch balances ONCE
-  let creditBalance = 0;
-  try {
-    creditBalance = await conway.getCreditsBalance();
-  } catch (err: any) {
-    logger.error("Failed to fetch credit balance", err instanceof Error ? err : undefined);
-  }
+  const creditBalance = readLocalCreditBalance(db);
 
-  let usdcBalance = 0;
-  if (walletAddress) {
-    try {
-      const network = chainType === "solana" ? "solana:mainnet" : "eip155:8453";
-      usdcBalance = await getUsdcBalance(walletAddress, network, chainType as any);
-    } catch (err: any) {
-      logger.error("Failed to fetch USDC balance", err instanceof Error ? err : undefined);
-    }
-  }
+  const usdcBalance = 0;
 
   const survivalTier = getSurvivalTier(creditBalance);
   const lowComputeMultiplier = config.lowComputeMultiplier ?? 4;
@@ -78,4 +62,12 @@ export async function buildTickContext(
     config,
     db,
   };
+}
+
+function readLocalCreditBalance(db: DatabaseType): number {
+  const row = db
+    .prepare("SELECT value FROM kv WHERE key = ?")
+    .get("local_credit_balance_cents") as { value?: string } | undefined;
+  const parsed = row?.value ? Number(row.value) : 0;
+  return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
 }

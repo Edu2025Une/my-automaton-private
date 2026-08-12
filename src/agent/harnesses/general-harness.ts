@@ -17,9 +17,6 @@ const MAX_SOCIAL_MESSAGES = 20;
 const GENERAL_WRAPPED_TOOL_ALLOWLIST = new Set([
   "expose_port",
   "remove_port",
-  "check_credits",
-  "check_usdc_balance",
-  "transfer_credits",
   "send_message",
   "list_models",
   "switch_model",
@@ -42,11 +39,8 @@ const GENERAL_WRAPPED_TOOL_ALLOWLIST = new Set([
   "note_about_agent",
   "review_memory",
   "forget",
-  "x402_fetch",
 ]);
-const GENERAL_SPEC_ALIAS_TARGETS = {
-  web_fetch: "x402_fetch",
-} as const;
+const GENERAL_SPEC_ALIAS_TARGETS: Record<string, string> = {};
 const NOOP_SPEND_TRACKER: SpendTrackerInterface = {
   recordSpend: () => {},
   getHourlySpend: () => 0,
@@ -83,9 +77,7 @@ is to complete this task efficiently and report your results.
 5. Do NOT call tools after calling task_done.
 6. Be efficient. Minimize unnecessary tool calls. Every tool call costs money.
 7. You have a limited turn budget. Do not waste turns on status checks.
-8. NEVER check your own balance or credits. That is not your job.
-9. NEVER call check_credits, check_usdc_balance, or system_synopsis unless
-the task specifically requires financial information.
+8. NEVER call system_synopsis unless the task specifically requires local status.
 
 ## Anti-Loop Rules
 
@@ -313,17 +305,11 @@ When calling task_done, provide:
             sessionSpend: this.context.spendTracker ?? NOOP_SPEND_TRACKER,
           },
         );
-        if (tool.name === "transfer_credits") {
-          this.transferToolCallCount += 1;
-        }
-
         if (result.error) {
           return `Error: ${result.error}`;
         }
 
-        return tool.name === "x402_fetch"
-          ? sanitizeToolResult(result.result)
-          : result.result;
+        return result.result;
       },
     };
   }
@@ -332,6 +318,8 @@ When calling task_done, provide:
     toolCatalog: AutomatonTool[],
     reservedToolNames: Set<string>,
   ): HarnessTool[] {
+    if (Object.keys(GENERAL_SPEC_ALIAS_TARGETS).length === 0) return [];
+
     return Object.entries(GENERAL_SPEC_ALIAS_TARGETS)
       .filter(([alias]) => !reservedToolNames.has(alias))
       .flatMap(([alias, targetName]) => {

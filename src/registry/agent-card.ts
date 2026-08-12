@@ -26,7 +26,7 @@ const AGENT_CARD_TYPE =
  * Generate an agent card from the automaton's current state.
  *
  * Phase 3.2: Only expose agentWallet service, name, generic description,
- * x402Support, and active status. Do NOT include:
+ * and active status. Do NOT include:
  * - Conway API URL (internal infrastructure)
  * - Sandbox ID (internal identifier)
  * - Creator address (privacy)
@@ -57,7 +57,6 @@ export function generateAgentCard(
     name: config.name,
     description,
     services,
-    x402Support: chainType !== "solana",
     active: true,
   };
 }

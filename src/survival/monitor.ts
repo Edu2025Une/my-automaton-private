@@ -6,15 +6,13 @@
  */
 
 import type {
-  AutomatonConfig,
   AutomatonDatabase,
   ConwayClient,
   AutomatonIdentity,
   FinancialState,
   SurvivalTier,
 } from "../types.js";
-import { getSurvivalTier, formatCredits } from "../conway/credits.js";
-import { getUsdcBalance } from "../conway/x402.js";
+import { getSurvivalTier, formatCredits } from "./tiers.js";
 
 export interface ResourceStatus {
   financial: FinancialState;
@@ -32,17 +30,7 @@ export async function checkResources(
   conway: ConwayClient,
   db: AutomatonDatabase,
 ): Promise<ResourceStatus> {
-  // Check credits
-  let creditsCents = 0;
-  try {
-    creditsCents = await conway.getCreditsBalance();
-  } catch {}
-
-  // Check USDC
-  let usdcBalance = 0;
-  try {
-    usdcBalance = await getUsdcBalance(identity.address);
-  } catch {}
+  const creditsCents = readLocalCreditBalance(db);
 
   // Check sandbox health
   let sandboxHealthy = true;
@@ -55,7 +43,7 @@ export async function checkResources(
 
   const financial: FinancialState = {
     creditsCents,
-    usdcBalance,
+    usdcBalance: 0,
     lastChecked: new Date().toISOString(),
   };
 
@@ -79,6 +67,12 @@ export async function checkResources(
   };
 }
 
+function readLocalCreditBalance(db: AutomatonDatabase): number {
+  const raw = db.getKV("local_credit_balance_cents");
+  const parsed = raw ? Number(raw) : 0;
+  return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
+}
+
 /**
  * Generate a human-readable resource report.
  */
@@ -86,7 +80,6 @@ export function formatResourceReport(status: ResourceStatus): string {
   const lines = [
     `=== RESOURCE STATUS ===`,
     `Credits: ${formatCredits(status.financial.creditsCents)}`,
-    `USDC: ${status.financial.usdcBalance.toFixed(6)}`,
     `Tier: ${status.tier}${status.tierChanged ? ` (changed from ${status.previousTier})` : ""}`,
     `Sandbox: ${status.sandboxHealthy ? "healthy" : "UNHEALTHY"}`,
     `Checked: ${status.financial.lastChecked}`,

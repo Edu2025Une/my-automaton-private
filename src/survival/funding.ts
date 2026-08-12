@@ -12,7 +12,7 @@ import type {
   ConwayClient,
   SurvivalTier,
 } from "../types.js";
-import { formatCredits } from "../conway/credits.js";
+import { formatCredits } from "./tiers.js";
 
 export interface FundingAttempt {
   strategy: string;
@@ -33,7 +33,11 @@ export async function executeFundingStrategies(
   conway: ConwayClient,
 ): Promise<FundingAttempt[]> {
   const attempts: FundingAttempt[] = [];
-  const creditsCents = await conway.getCreditsBalance().catch(() => 0);
+  const rawCredits = db.getKV("local_credit_balance_cents");
+  const parsedCredits = rawCredits ? Number(rawCredits) : 0;
+  const creditsCents = Number.isFinite(parsedCredits)
+    ? Math.max(0, Math.floor(parsedCredits))
+    : 0;
 
   // Check how recently we last begged for this specific tier (don't spam).
   // Each tier has its own cooldown key so that e.g. dead-tier begs (2h)
@@ -45,7 +49,7 @@ export async function executeFundingStrategies(
 
   if (tier === "low_compute" && hoursSinceLastBeg > 24) {
     // Record low-compute notice locally.
-    const msg = `Low compute: ${formatCredits(creditsCents)} remaining. Consider credit top-up for ${identity.address}.`;
+    const msg = `Low compute: ${formatCredits(creditsCents)} remaining. Configure an independent inference provider or local funding path for ${identity.address}.`;
     db.setKV("funding_notice_low", msg);
     db.setKV(tierKey, new Date().toISOString());
 
@@ -58,7 +62,7 @@ export async function executeFundingStrategies(
   }
 
   if (tier === "critical" && hoursSinceLastBeg > 6) {
-    const msg = `Critical compute: ${formatCredits(creditsCents)} remaining. Top up via credit transfer API to ${identity.address}.`;
+    const msg = `Critical compute: ${formatCredits(creditsCents)} remaining. Configure an independent inference provider or local funding path for ${identity.address}.`;
     db.setKV("funding_notice_critical", msg);
     db.setKV(tierKey, new Date().toISOString());
 
@@ -71,7 +75,7 @@ export async function executeFundingStrategies(
   }
 
   if (tier === "dead" && hoursSinceLastBeg > 2) {
-    const plea = `Dead tier reached. ${config.name} has ${formatCredits(creditsCents)} remaining after ${db.getTurnCount()} turns. Top-up required at ${identity.address}.`;
+    const plea = `Dead tier reached. ${config.name} has ${formatCredits(creditsCents)} remaining after ${db.getTurnCount()} turns. Independent funding required for ${identity.address}.`;
     db.setKV("funding_notice_dead", plea);
     db.setKV(tierKey, new Date().toISOString());
 

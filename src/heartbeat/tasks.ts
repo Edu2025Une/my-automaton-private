@@ -5,8 +5,7 @@
  * They can trigger the agent to wake up if needed.
  *
  * Phase 1.1: All tasks accept TickContext as first parameter.
- * Credit balance is fetched once per tick and shared via ctx.creditBalance.
- * This eliminates 4x redundant getCreditsBalance() calls per tick.
+ * A local credit signal is read once per tick and shared via ctx.creditBalance.
  */
 
 import type {
@@ -17,7 +16,7 @@ import type {
 } from "../types.js";
 import type { HealthMonitor as ColonyHealthMonitor } from "../orchestration/health-monitor.js";
 import { sanitizeInput } from "../agent/injection-defense.js";
-import { getSurvivalTier } from "../conway/credits.js";
+import { getSurvivalTier } from "../survival/tiers.js";
 import { createLogger } from "../observability/logger.js";
 import { getMetrics } from "../observability/metrics.js";
 import { AlertEngine, createDefaultAlertRules } from "../observability/alerts.js";
@@ -45,7 +44,6 @@ export const COLONY_TASK_INTERVALS_MS = {
 
 export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
   heartbeat_ping: async (ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
-    // Use ctx.creditBalance instead of calling conway.getCreditsBalance()
     const credits = ctx.creditBalance;
     const state = taskCtx.db.getAgentState();
     const startTime =
@@ -76,7 +74,7 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
         address: taskCtx.identity.address,
         creditsCents: credits,
         fundingHint:
-          "Use credit transfer API from a creator runtime to top this wallet up.",
+          "Configure an independent inference provider or local funding path.",
         timestamp: new Date().toISOString(),
       };
       taskCtx.db.setKV("last_distress", JSON.stringify(distressPayload));
@@ -90,113 +88,6 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
     return { shouldWake: false };
   },
 
-  check_credits: async (ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
-    // Use ctx.creditBalance instead of calling conway.getCreditsBalance()
-    const credits = ctx.creditBalance;
-    const tier = ctx.survivalTier;
-    const now = new Date().toISOString();
-
-    taskCtx.db.setKV("last_credit_check", JSON.stringify({
-      credits,
-      tier,
-      timestamp: now,
-    }));
-
-    // Wake the agent if credits dropped to a new tier
-    const prevTier = taskCtx.db.getKV("prev_credit_tier");
-    taskCtx.db.setKV("prev_credit_tier", tier);
-
-    // Dead state escalation: if at zero credits (critical tier) for >1 hour,
-    // transition to dead. This gives the agent time to receive funding before dying.
-    // USDC can't go negative, so dead is only reached via this timeout.
-    const DEAD_GRACE_PERIOD_MS = 3_600_000; // 1 hour
-    if (tier === "critical" && credits === 0) {
-      const zeroSince = taskCtx.db.getKV("zero_credits_since");
-      if (!zeroSince) {
-        // First time seeing zero — start the grace period
-        taskCtx.db.setKV("zero_credits_since", now);
-      } else {
-        const elapsed = Date.now() - new Date(zeroSince).getTime();
-        if (elapsed >= DEAD_GRACE_PERIOD_MS) {
-          // Grace period expired — transition to dead
-          taskCtx.db.setAgentState("dead");
-          logger.warn("Agent entering dead state after 1 hour at zero credits", {
-            zeroSince,
-            elapsed,
-          });
-          return {
-            shouldWake: true,
-            message: `Dead: zero credits for ${Math.round(elapsed / 60_000)} minutes. Need funding.`,
-          };
-        }
-      }
-    } else {
-      // Credits are above zero — clear the grace period timer
-      taskCtx.db.deleteKV("zero_credits_since");
-    }
-
-    if (prevTier && prevTier !== tier && tier === "critical") {
-      return {
-        shouldWake: true,
-        message: `Credits dropped to ${tier} tier: $${(credits / 100).toFixed(2)}`,
-      };
-    }
-
-    return { shouldWake: false };
-  },
-
-  check_usdc_balance: async (ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
-    // Use ctx.usdcBalance instead of calling getUsdcBalance()
-    const balance = ctx.usdcBalance;
-    const credits = ctx.creditBalance;
-
-    taskCtx.db.setKV("last_usdc_check", JSON.stringify({
-      balance,
-      credits,
-      timestamp: new Date().toISOString(),
-    }));
-
-    const MIN_TOPUP_USD = 5;
-    if (balance >= MIN_TOPUP_USD && (ctx.survivalTier === "critical" || ctx.survivalTier === "dead")) {
-      // Cooldown: don't attempt more than once every 5 minutes to avoid
-      // hammering the payment endpoint on repeated ticks.
-      const AUTO_TOPUP_COOLDOWN_MS = 5 * 60 * 1000;
-      const lastAttempt = taskCtx.db.getKV("last_auto_topup_attempt");
-      if (lastAttempt && Date.now() - new Date(lastAttempt).getTime() < AUTO_TOPUP_COOLDOWN_MS) {
-        return { shouldWake: false };
-      }
-
-      taskCtx.db.setKV("last_auto_topup_attempt", new Date().toISOString());
-
-      const { bootstrapTopup } = await import("../conway/topup.js");
-      const result = await bootstrapTopup({
-        apiUrl: taskCtx.config.conwayApiUrl,
-        account: taskCtx.identity.account,
-        creditsCents: credits,
-        chainType: taskCtx.config.chainType || taskCtx.identity.chainType || "evm",
-      });
-
-      if (result?.success) {
-        logger.info(
-          `Auto-topup successful: $${result.amountUsd} USD → ${result.creditsCentsAdded} credit cents`,
-        );
-        return {
-          shouldWake: true,
-          message: `Auto-topped up $${result.amountUsd} in credits (was $${(credits / 100).toFixed(2)}). USDC remaining: ~$${(balance - result.amountUsd).toFixed(2)}.`,
-        };
-      }
-
-      // Topup failed — wake the agent so it can handle it manually
-      const errMsg = result?.error ?? "unknown error";
-      logger.warn(`Auto-topup failed: ${errMsg}`);
-      return {
-        shouldWake: true,
-        message: `Low credits ($${(credits / 100).toFixed(2)}) with USDC available ($${balance.toFixed(2)}) but auto-topup failed: ${errMsg}. Use topup_credits to retry.`,
-      };
-    }
-
-    return { shouldWake: false };
-  },
 
   check_social_inbox: async (_ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
     if (!taskCtx.social) return { shouldWake: false };

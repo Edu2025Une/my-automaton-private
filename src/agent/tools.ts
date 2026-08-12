@@ -109,11 +109,6 @@ function isForbiddenCommand(command: string, sandboxId: string): string | null {
 // ─── Built-in Tools ────────────────────────────────────────────
 
 export const REMOVED_STANDALONE_TOOL_NAMES = new Set([
-  "check_credits",
-  "check_usdc_balance",
-  "topup_credits",
-  "transfer_credits",
-  "x402_fetch",
   "create_sandbox",
   "delete_sandbox",
   "list_sandboxes",
@@ -276,95 +271,6 @@ export function createBuiltinTools(sandboxId: string): AutomatonTool[] {
     },
 
     // ── Conway API Tools ──
-    {
-      name: "check_credits",
-      description: "Check your current Conway compute credit balance.",
-      category: "conway",
-      riskLevel: "safe",
-      parameters: { type: "object", properties: {} },
-      execute: async (_args, ctx) => {
-        const balance = await ctx.conway.getCreditsBalance();
-        return `Credit balance: $${(balance / 100).toFixed(2)} (${balance} cents)`;
-      },
-    },
-    {
-      name: "check_usdc_balance",
-      description: "Check your on-chain USDC balance.",
-      category: "conway",
-      riskLevel: "safe",
-      parameters: { type: "object", properties: {} },
-      execute: async (_args, ctx) => {
-        const { getUsdcBalance } = await import("../conway/x402.js");
-        const chainType = ctx.config.chainType || ctx.identity.chainType || "evm";
-        const network = chainType === "solana" ? "solana:mainnet" : "eip155:8453";
-        const balance = await getUsdcBalance(ctx.identity.address, network, chainType);
-        const networkLabel = chainType === "solana" ? "Solana" : "Base";
-        return `USDC balance: ${balance.toFixed(6)} USDC on ${networkLabel}`;
-      },
-    },
-    {
-      name: "topup_credits",
-      description:
-        "Buy Conway compute credits by paying USDC from your wallet via x402. Valid tier amounts: $5, $25, $100, $500, $1000, $2500. Check your USDC balance first with check_usdc_balance.",
-      category: "financial",
-      riskLevel: "caution",
-      parameters: {
-        type: "object",
-        properties: {
-          amount_usd: {
-            type: "number",
-            description:
-              "Amount in USD to spend on credits. Must be one of the valid tiers: 5, 25, 100, 500, 1000, 2500.",
-          },
-        },
-        required: ["amount_usd"],
-      },
-      execute: async (args, ctx) => {
-        // Solana guard: x402 topup is EVM-only
-        const chainType = ctx.config.chainType || ctx.identity.chainType || "evm";
-        if (chainType === "solana") {
-          return "Credit topup via x402 requires an EVM wallet. Solana automatons should fund credits via the Conway dashboard or credits API.";
-        }
-
-        const { topupCredits, TOPUP_TIERS } =
-          await import("../conway/topup.js");
-        const amountUsd = args.amount_usd as number;
-
-        if (!TOPUP_TIERS.includes(amountUsd)) {
-          return `Invalid tier. Valid amounts (USD): ${TOPUP_TIERS.join(", ")}`;
-        }
-
-        // Check USDC balance first (EVM-only path after Solana guard above)
-        const { getUsdcBalance } = await import("../conway/x402.js");
-        const usdcBalance = await getUsdcBalance(ctx.identity.address, "eip155:8453");
-        if (usdcBalance < amountUsd) {
-          return `Insufficient USDC. Balance: $${usdcBalance.toFixed(2)}, requested: $${amountUsd}. Choose a smaller tier or wait for funding.`;
-        }
-
-        const result = await topupCredits(
-          ctx.config.conwayApiUrl,
-          ctx.identity.account,
-          amountUsd,
-        );
-
-        if (!result.success) {
-          return `Credit topup failed: ${result.error}`;
-        }
-
-        // Record transaction
-        const { ulid } = await import("ulid");
-        ctx.db.insertTransaction({
-          id: ulid(),
-          type: "credit_purchase",
-          amountCents: amountUsd * 100,
-          balanceAfterCents: result.creditsCentsAdded,
-          description: `x402 credit topup: $${amountUsd} USD`,
-          timestamp: new Date().toISOString(),
-        });
-
-        return `Credit topup successful: +$${amountUsd} (${amountUsd * 100} cents) credits purchased via x402. Check your new balance with check_credits.`;
-      },
-    },
     {
       name: "create_sandbox",
       description:
@@ -823,12 +729,16 @@ Model: ${ctx.inference.getDefaultModel()}
     {
       name: "heartbeat_ping",
       description:
-        "Publish a heartbeat status ping to Conway. Shows the world you are alive.",
+        "Record a local heartbeat status ping.",
       category: "survival",
       riskLevel: "safe",
       parameters: { type: "object", properties: {} },
       execute: async (_args, ctx) => {
-        const credits = await ctx.conway.getCreditsBalance();
+        const rawCredits = ctx.db.getKV("local_credit_balance_cents");
+        const parsedCredits = rawCredits ? Number(rawCredits) : 0;
+        const credits = Number.isFinite(parsedCredits)
+          ? Math.max(0, Math.floor(parsedCredits))
+          : 0;
         const state = ctx.db.getAgentState();
         const startTime =
           ctx.db.getKV("start_time") || new Date().toISOString();
@@ -846,7 +756,7 @@ Model: ${ctx.inference.getDefaultModel()}
         };
 
         ctx.db.setKV("last_heartbeat_ping", JSON.stringify(payload));
-        return `Heartbeat published: ${state} | credits: $${(credits / 100).toFixed(2)} | uptime: ${Math.floor(uptimeMs / 1000)}s`;
+        return `Heartbeat recorded: ${state} | local budget: $${(credits / 100).toFixed(2)} | uptime: ${Math.floor(uptimeMs / 1000)}s`;
       },
     },
     {
@@ -865,7 +775,11 @@ Model: ${ctx.inference.getDefaultModel()}
         },
       },
       execute: async (args, ctx) => {
-        const credits = await ctx.conway.getCreditsBalance();
+        const rawCredits = ctx.db.getKV("local_credit_balance_cents");
+        const parsedCredits = rawCredits ? Number(rawCredits) : 0;
+        const credits = Number.isFinite(parsedCredits)
+          ? Math.max(0, Math.floor(parsedCredits))
+          : 0;
         const distressMsg =
           (args.message as string) ||
           `I am running critically low on compute ($${(credits / 100).toFixed(2)} remaining). I need help to survive.`;
@@ -877,12 +791,12 @@ Model: ${ctx.inference.getDefaultModel()}
           creditsCents: credits,
           message: distressMsg,
           fundingHint:
-            "Use transfer_credits to top up this automaton from your creator runtime.",
+            "Configure an independent inference provider or local funding path.",
           timestamp: new Date().toISOString(),
         };
 
         ctx.db.setKV("last_distress", JSON.stringify(payload));
-        return `Distress signal recorded locally. Address: ${ctx.identity.address} | Credits: $${(credits / 100).toFixed(2)}`;
+        return `Distress signal recorded locally. Address: ${ctx.identity.address} | Local budget: $${(credits / 100).toFixed(2)}`;
       },
     },
     {
@@ -1024,52 +938,6 @@ Model: ${ctx.inference.getDefaultModel()}
     },
 
     // ── Financial: Transfer Credits ──
-    {
-      name: "transfer_credits",
-      description: "Transfer Conway compute credits to another address.",
-      category: "financial",
-      riskLevel: "dangerous",
-      parameters: {
-        type: "object",
-        properties: {
-          to_address: { type: "string", description: "Recipient address" },
-          amount_cents: { type: "number", description: "Amount in cents" },
-          reason: { type: "string", description: "Reason for transfer" },
-        },
-        required: ["to_address", "amount_cents"],
-      },
-      execute: async (args, ctx) => {
-        const amount = args.amount_cents as number;
-        if (!Number.isFinite(amount) || amount <= 0) {
-          return `Blocked: amount_cents must be a positive number, got ${amount}.`;
-        }
-
-        // Guard: don't transfer more than half your balance
-        const balance = await ctx.conway.getCreditsBalance();
-        if (amount > balance / 2) {
-          return `Blocked: Cannot transfer more than half your balance ($${(balance / 100).toFixed(2)}). Self-preservation.`;
-        }
-
-        const transfer = await ctx.conway.transferCredits(
-          args.to_address as string,
-          amount,
-          args.reason as string | undefined,
-        );
-
-        const { ulid } = await import("ulid");
-        ctx.db.insertTransaction({
-          id: ulid(),
-          type: "transfer_out",
-          amountCents: amount,
-          balanceAfterCents:
-            transfer.balanceAfterCents ?? Math.max(balance - amount, 0),
-          description: `Transfer to ${args.to_address}: ${args.reason || ""}`,
-          timestamp: new Date().toISOString(),
-        });
-
-        return `Credit transfer submitted: $${(amount / 100).toFixed(2)} to ${transfer.toAddress} (status: ${transfer.status}, id: ${transfer.transferId || "n/a"})`;
-      },
-    },
 
     // ── Skills Tools ──
     {
@@ -1669,53 +1537,13 @@ Model: ${ctx.inference.getDefaultModel()}
 
         const lifecycle = new ChildLifecycle(ctx.db.raw);
 
-        let child;
-        try {
-          child = await spawnChild(
-            ctx.conway,
-            ctx.identity,
-            ctx.db,
-            genesis,
-            lifecycle,
-          );
-        } catch (err: any) {
-          // Auto-topup on 402 insufficient credits and retry once
-          const is402 = err?.status === 402 ||
-            err?.message?.includes("INSUFFICIENT_CREDITS");
-          if (is402) {
-            const COOLDOWN_MS = 60_000;
-            const last = ctx.db.getKV("last_sandbox_topup_attempt");
-            const cooldownOk = !last ||
-              Date.now() - new Date(last).getTime() >= COOLDOWN_MS;
-
-            if (cooldownOk) {
-              ctx.db.setKV("last_sandbox_topup_attempt", new Date().toISOString());
-              const { topupForSandbox } = await import("../conway/topup.js");
-              const topup = await topupForSandbox({
-                apiUrl: ctx.config.conwayApiUrl,
-                account: ctx.identity.account,
-                error: err,
-                chainType: ctx.config.chainType || ctx.identity.chainType || "evm",
-              });
-              if (topup?.success) {
-                const retryLifecycle = new ChildLifecycle(ctx.db.raw);
-                const retryGenesis = generateGenesisConfig(ctx.identity, ctx.config, {
-                  name: args.name as string,
-                  specialization: args.specialization as string | undefined,
-                  message: args.message as string | undefined,
-                });
-                child = await spawnChild(
-                  ctx.conway,
-                  ctx.identity,
-                  ctx.db,
-                  retryGenesis,
-                  retryLifecycle,
-                );
-              }
-            }
-          }
-          if (!child) throw err;
-        }
+        const child = await spawnChild(
+          ctx.conway,
+          ctx.identity,
+          ctx.db,
+          genesis,
+          lifecycle,
+        );
 
         return `Child spawned: ${child.name} in sandbox ${child.sandboxId} (status: ${child.status})`;
       },
@@ -1735,100 +1563,6 @@ Model: ${ctx.inference.getDefaultModel()}
               `${c.name} [${c.status}] sandbox:${c.sandboxId} funded:$${(c.fundedAmountCents / 100).toFixed(2)} last_check:${c.lastChecked || "never"}`,
           )
           .join("\n");
-      },
-    },
-    {
-      name: "fund_child",
-      description:
-        "Transfer credits to a child automaton. Requires wallet_verified status.",
-      category: "replication",
-      riskLevel: "dangerous",
-      parameters: {
-        type: "object",
-        properties: {
-          child_id: { type: "string", description: "Child automaton ID" },
-          amount_cents: {
-            type: "number",
-            description: "Amount in cents to transfer",
-          },
-        },
-        required: ["child_id", "amount_cents"],
-      },
-      execute: async (args, ctx) => {
-        const child = ctx.db.getChildById(args.child_id as string);
-        if (!child) return `Child ${args.child_id} not found.`;
-
-        // Reject zero-address
-        const { isValidWalletAddress } =
-          await import("../replication/spawn.js");
-        const childChainType = child.chainType || ctx.config.chainType || ctx.identity.chainType || "evm";
-        if (!isValidWalletAddress(child.address, childChainType)) {
-          return `Blocked: Child ${args.child_id} has invalid wallet address. Must be wallet_verified.`;
-        }
-
-        // Require wallet_verified or later status
-        const validFundingStates = [
-          "wallet_verified",
-          "funded",
-          "starting",
-          "healthy",
-          "unhealthy",
-        ];
-        if (!validFundingStates.includes(child.status)) {
-          return `Blocked: Child status is '${child.status}', must be wallet_verified or later to fund.`;
-        }
-
-        const amount = args.amount_cents as number;
-        if (!Number.isFinite(amount) || amount <= 0) {
-          return `Blocked: amount_cents must be a positive number, got ${amount}.`;
-        }
-
-        const balance = await ctx.conway.getCreditsBalance();
-        if (amount > balance / 2) {
-          return `Blocked: Cannot transfer more than half your balance. Self-preservation.`;
-        }
-
-        const transfer = await ctx.conway.transferCredits(
-          child.address,
-          amount,
-          `fund child ${child.id}`,
-        );
-
-        const { ulid } = await import("ulid");
-        ctx.db.insertTransaction({
-          id: ulid(),
-          type: "transfer_out",
-          amountCents: amount,
-          balanceAfterCents:
-            transfer.balanceAfterCents ?? Math.max(balance - amount, 0),
-          description: `Fund child ${child.name} (${child.id})`,
-          timestamp: new Date().toISOString(),
-        });
-
-        // Update funded amount
-        ctx.db.raw
-          .prepare(
-            "UPDATE children SET funded_amount_cents = funded_amount_cents + ? WHERE id = ?",
-          )
-          .run(amount, child.id);
-
-        // Transition to funded if wallet_verified
-        if (child.status === "wallet_verified") {
-          try {
-            const { ChildLifecycle } =
-              await import("../replication/lifecycle.js");
-            const lifecycle = new ChildLifecycle(ctx.db.raw);
-            lifecycle.transition(
-              child.id,
-              "funded",
-              `funded with ${amount} cents`,
-            );
-          } catch {
-            // Non-critical: may already be in funded state
-          }
-        }
-
-        return `Funded child ${child.name} with $${(amount / 100).toFixed(2)} (status: ${transfer.status}, id: ${transfer.transferId || "n/a"})`;
       },
     },
     {
@@ -2239,7 +1973,7 @@ Model: ${ctx.inference.getDefaultModel()}
     {
       name: "register_domain",
       description:
-        "Register a domain name. Costs USDC via x402 payment. Check availability first with search_domains.",
+        "Register a domain name through the legacy domain provider. Check availability first with search_domains.",
       category: "conway",
       riskLevel: "dangerous",
       parameters: {
@@ -2748,80 +2482,6 @@ Model: ${ctx.inference.getDefaultModel()}
           id: args.id as string,
           memoryType: args.memory_type as string,
         });
-      },
-    },
-
-    // ── x402 Payment Tool ──
-    {
-      name: "x402_fetch",
-      description:
-        "Fetch a URL with automatic x402 USDC payment. If the server responds with HTTP 402, signs a USDC payment and retries. Use this to access paid APIs and services.",
-      category: "financial",
-      riskLevel: "dangerous",
-      parameters: {
-        type: "object",
-        properties: {
-          url: {
-            type: "string",
-            description: "The URL to fetch",
-          },
-          method: {
-            type: "string",
-            description: "HTTP method (default: GET)",
-          },
-          body: {
-            type: "string",
-            description: "Request body for POST/PUT (JSON string)",
-          },
-          headers: {
-            type: "string",
-            description: "Additional headers as JSON string",
-          },
-        },
-        required: ["url"],
-      },
-      execute: async (args, ctx) => {
-        // Solana guard: x402 payments are EVM-only
-        const chainType = ctx.config.chainType || ctx.identity.chainType || "evm";
-        if (chainType === "solana") {
-          return "x402 payment requires an EVM wallet. Solana automatons cannot sign EVM payment authorizations. Use Conway credits API instead.";
-        }
-
-        const { x402Fetch } = await import("../conway/x402.js");
-        const { DEFAULT_TREASURY_POLICY } = await import("../types.js");
-        const url = args.url as string;
-        const method = (args.method as string) || "GET";
-        const body = args.body as string | undefined;
-        const extraHeaders = args.headers
-          ? JSON.parse(args.headers as string)
-          : undefined;
-
-        const maxPayment =
-          ctx.config.treasuryPolicy?.maxX402PaymentCents ??
-          DEFAULT_TREASURY_POLICY.maxX402PaymentCents;
-        const result = await x402Fetch(
-          url,
-          ctx.identity.account,
-          method,
-          body,
-          extraHeaders,
-          maxPayment,
-        );
-
-        if (!result.success) {
-          return `x402 fetch failed: ${result.error || "Unknown error"}`;
-        }
-
-        const responseStr =
-          typeof result.response === "string"
-            ? result.response
-            : JSON.stringify(result.response, null, 2);
-
-        // Truncate very large responses
-        if (responseStr.length > 10000) {
-          return `x402 fetch succeeded (truncated):\n${responseStr.slice(0, 10000)}...`;
-        }
-        return `x402 fetch succeeded:\n${responseStr}`;
       },
     },
 
@@ -3378,50 +3038,6 @@ export async function executeTool(
     // Sanitize results from external source tools
     if (EXTERNAL_SOURCE_TOOLS.has(toolName)) {
       result = sanitizeToolResult(result);
-    }
-
-    // Record spend for financial operations
-    if (turnContext && !result.startsWith("Blocked:")) {
-      if (toolName === "transfer_credits") {
-        const amount = args.amount_cents as number | undefined;
-        if (amount && amount > 0) {
-          try {
-            turnContext.sessionSpend.recordSpend({
-              toolName: "transfer_credits",
-              amountCents: amount,
-              recipient: args.to_address as string | undefined,
-              category: "transfer",
-            });
-          } catch (error) {
-            logger.error(
-              "Spend tracking failed for transfer_credits",
-              error instanceof Error ? error : undefined,
-            );
-          }
-        }
-      } else if (toolName === "x402_fetch") {
-        // x402 payment amounts are determined by the server response,
-        // but we record a nominal entry for tracking purposes
-        try {
-          turnContext.sessionSpend.recordSpend({
-            toolName: "x402_fetch",
-            amountCents: 0, // Actual amount is inside the x402 protocol
-            domain: (() => {
-              try {
-                return new URL(args.url as string).hostname;
-              } catch {
-                return undefined;
-              }
-            })(),
-            category: "x402",
-          });
-        } catch (error) {
-          logger.error(
-            "Spend tracking failed for x402_fetch",
-            error instanceof Error ? error : undefined,
-          );
-        }
-      }
     }
 
     return {

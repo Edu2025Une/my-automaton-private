@@ -62,7 +62,7 @@ export const CREATE_TABLES = `
   );
 
   -- Financial transaction log
-  -- Application-level validation: type must be one of 'transfer_out','transfer_in','credit_purchase','topup','x402_payment','inference'
+  -- Application-level validation: type must be one of 'transfer_out','transfer_in','credit_purchase','inference'
   CREATE TABLE IF NOT EXISTS transactions (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,
@@ -216,7 +216,7 @@ export const MIGRATION_V4 = `
     amount_cents INTEGER NOT NULL,
     recipient TEXT,
     domain TEXT,
-    category TEXT NOT NULL CHECK(category IN ('transfer','x402','inference','other')),
+    category TEXT NOT NULL CHECK(category IN ('transfer','inference','other')),
     window_hour TEXT NOT NULL,
     window_day TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))

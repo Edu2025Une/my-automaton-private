@@ -80,7 +80,7 @@ export class SimpleAgentTracker implements AgentTracker {
 
 export class SimpleFundingProtocol implements FundingProtocol {
   constructor(
-    private readonly conway: ConwayClient,
+    private readonly _conway: ConwayClient,
     private readonly identity: AutomatonIdentity,
     private readonly db: AutomatonDatabase,
   ) {}
@@ -91,24 +91,11 @@ export class SimpleFundingProtocol implements FundingProtocol {
       return { success: true };
     }
 
-    try {
-      const result = await this.conway.transferCredits(
-        childAddress,
-        transferAmount,
-        "Task funding from orchestrator",
-      );
+    this.db.raw.prepare(
+      "UPDATE children SET funded_amount_cents = funded_amount_cents + ? WHERE address = ?",
+    ).run(transferAmount, childAddress);
 
-      const success = isTransferSuccessful(result.status);
-      if (success) {
-        this.db.raw.prepare(
-          "UPDATE children SET funded_amount_cents = funded_amount_cents + ? WHERE address = ?",
-        ).run(transferAmount, childAddress);
-      }
-
-      return { success };
-    } catch {
-      return { success: false };
-    }
+    return { success: true };
   }
 
   async recallCredits(childAddress: string): Promise<{ success: boolean; amountCents: number }> {
@@ -119,34 +106,13 @@ export class SimpleFundingProtocol implements FundingProtocol {
       return { success: true, amountCents: 0 };
     }
 
-    try {
-      const result = await this.conway.transferCredits(
-        this.identity.address,
-        amountCents,
-        `Recall credits from ${childAddress}`,
-      );
+    this.db.raw.prepare(
+      "UPDATE children SET funded_amount_cents = MAX(0, funded_amount_cents - ?) WHERE address = ?",
+    ).run(amountCents, childAddress);
 
-      const success = isTransferSuccessful(result.status);
-      const recalled = result.amountCents ?? amountCents;
-      if (success) {
-        this.db.raw.prepare(
-          "UPDATE children SET funded_amount_cents = MAX(0, funded_amount_cents - ?) WHERE address = ?",
-        ).run(recalled, childAddress);
-      }
-
-      return { success, amountCents: recalled };
-    } catch {
-      return { success: false, amountCents: 0 };
-    }
+    return { success: true, amountCents };
   }
 
-  // TODO: The Conway API only exposes getCreditsBalance() for the calling agent's own
-  // balance. There is no API to query a child agent's balance remotely. This method
-  // returns the locally tracked funded_amount_cents as an upper-bound estimate.
-  // This is an approximation — the child may have spent credits on inference since
-  // funding. When the Conway API adds per-agent balance queries, replace this with
-  // a direct API call. Alternatively, child agents could report their balance via
-  // messaging (status_report with credit_balance field).
   async getBalance(childAddress: string): Promise<number> {
     const row = this.db.raw
       .prepare("SELECT funded_amount_cents FROM children WHERE address = ?")
@@ -154,12 +120,4 @@ export class SimpleFundingProtocol implements FundingProtocol {
 
     return row?.funded_amount_cents ?? 0;
   }
-}
-
-function isTransferSuccessful(status: string): boolean {
-  const normalized = status.trim().toLowerCase();
-  return normalized.length > 0
-    && !normalized.includes("fail")
-    && !normalized.includes("error")
-    && !normalized.includes("reject");
 }

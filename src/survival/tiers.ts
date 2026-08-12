@@ -7,3 +7,7 @@ export function getSurvivalTier(creditsCents: number): SurvivalTier {
   if (creditsCents <= SURVIVAL_THRESHOLDS.normal) return "normal";
   return "high";
 }
+
+export function formatCredits(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}

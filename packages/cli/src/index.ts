@@ -17,9 +17,6 @@ async function main(): Promise<void> {
     case "logs":
       await import("./commands/logs.js");
       break;
-    case "fund":
-      await import("./commands/fund.js");
-      break;
     case "send":
       await import("./commands/send.js");
       break;
@@ -30,7 +27,6 @@ Conway Automaton CLI - Creator Tools
 Usage:
   automaton-cli status              Show automaton status
   automaton-cli logs [--tail N]     View automaton logs
-  automaton-cli fund <amount> [--to 0x...]  Transfer Conway credits
   automaton-cli send <to-address> <message> Send a social message
 `);
   }
