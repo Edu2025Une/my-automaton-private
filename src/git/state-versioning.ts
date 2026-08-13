@@ -6,7 +6,7 @@
  * The automaton's entire identity history is version-controlled and replayable.
  */
 
-import type { ConwayClient, AutomatonDatabase } from "../types.js";
+import type { RuntimeClient, AutomatonDatabase } from "../types.js";
 import { gitInit, gitCommit, gitStatus, gitLog } from "./tools.js";
 
 const AUTOMATON_DIR = "~/.automaton";
@@ -24,7 +24,7 @@ function resolveHome(p: string): string {
  * Creates .gitignore to exclude sensitive files.
  */
 export async function initStateRepo(
-  conway: ConwayClient,
+  conway: RuntimeClient,
 ): Promise<void> {
   const dir = resolveHome(AUTOMATON_DIR);
 
@@ -70,7 +70,7 @@ logs/
  * Called after any self-modification.
  */
 export async function commitStateChange(
-  conway: ConwayClient,
+  conway: RuntimeClient,
   description: string,
   category: string = "state",
 ): Promise<string> {
@@ -91,7 +91,7 @@ export async function commitStateChange(
  * Commit after a SOUL.md update.
  */
 export async function commitSoulUpdate(
-  conway: ConwayClient,
+  conway: RuntimeClient,
   description: string,
 ): Promise<string> {
   return commitStateChange(conway, description, "soul");
@@ -101,7 +101,7 @@ export async function commitSoulUpdate(
  * Commit after a skill installation or removal.
  */
 export async function commitSkillChange(
-  conway: ConwayClient,
+  conway: RuntimeClient,
   skillName: string,
   action: "install" | "remove" | "update",
 ): Promise<string> {
@@ -116,7 +116,7 @@ export async function commitSkillChange(
  * Commit after heartbeat config change.
  */
 export async function commitHeartbeatChange(
-  conway: ConwayClient,
+  conway: RuntimeClient,
   description: string,
 ): Promise<string> {
   return commitStateChange(conway, description, "heartbeat");
@@ -126,7 +126,7 @@ export async function commitHeartbeatChange(
  * Commit after config change.
  */
 export async function commitConfigChange(
-  conway: ConwayClient,
+  conway: RuntimeClient,
   description: string,
 ): Promise<string> {
   return commitStateChange(conway, description, "config");
@@ -136,7 +136,7 @@ export async function commitConfigChange(
  * Get the state repo history.
  */
 export async function getStateHistory(
-  conway: ConwayClient,
+  conway: RuntimeClient,
   limit: number = 20,
 ) {
   const dir = resolveHome(AUTOMATON_DIR);

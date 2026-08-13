@@ -14,7 +14,7 @@
 import type {
   AutomatonConfig,
   AutomatonDatabase,
-  ConwayClient,
+  RuntimeClient,
   AutomatonIdentity,
   HeartbeatConfig,
   HeartbeatTaskFn,
@@ -36,7 +36,7 @@ export interface HeartbeatDaemonOptions {
   heartbeatConfig: HeartbeatConfig;
   db: AutomatonDatabase;
   rawDb: DatabaseType;
-  conway: ConwayClient;
+  conway: RuntimeClient;
   onWakeRequest?: (reason: string) => void;
 }
 

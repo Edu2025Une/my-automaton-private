@@ -116,6 +116,10 @@ export const REMOVED_STANDALONE_TOOL_NAMES = new Set([
   "manage_dns",
   "list_models",
   "switch_model",
+  "review_upstream_changes",
+  "pull_upstream",
+  "git_clone",
+  "git_push",
 ]);
 
 export function createBuiltinTools(sandboxId: string): AutomatonTool[] {

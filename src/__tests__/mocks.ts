@@ -8,7 +8,7 @@ import type {
   InferenceResponse,
   InferenceOptions,
   ChatMessage,
-  ConwayClient,
+  RuntimeClient,
   ExecResult,
   PortInfo,
   DomainSearchResult,
@@ -106,7 +106,7 @@ export function toolCallResponse(
 
 // ─── Mock Conway Client ─────────────────────────────────────────
 
-export class MockConwayClient implements ConwayClient {
+export class MockConwayClient implements RuntimeClient {
   execCalls: { command: string; timeout?: number }[] = [];
   creditsCents = 10_000; // $100 default
   files: Record<string, string> = {};

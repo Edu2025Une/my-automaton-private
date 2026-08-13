@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { createInferenceClient } from "../conway/inference.js";
+import { createInferenceClient } from "../inference/inference.js";
 import {
   buildOpenRouterProviderPayload,
   resolveExplicitStandaloneProvider,
@@ -360,7 +360,7 @@ describe("OpenRouter standalone provider", () => {
       "../setup/configure.ts",
       "../setup/defaults.ts",
       "../agent/loop.ts",
-      "../conway/inference.ts",
+      "../inference/inference.ts",
     ];
     const forbidden = [
       "api.conway.tech",

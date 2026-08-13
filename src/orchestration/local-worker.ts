@@ -18,7 +18,7 @@ import type {
   AutomatonConfig,
   AutomatonIdentity,
   AutomatonTool,
-  ConwayClient,
+  RuntimeClient,
   InputSource,
   SpendTrackerInterface,
   ToolContext,
@@ -32,7 +32,7 @@ const DEFAULT_ALLOWED_EDIT_ROOT = process.cwd();
 interface LocalWorkerConfig {
   db: Database;
   inference: WorkerInferenceClient;
-  conway: ConwayClient;
+  conway: RuntimeClient;
   maxTurns?: number;
   harnessRegistry: HarnessRegistry;
   identity: AutomatonIdentity;

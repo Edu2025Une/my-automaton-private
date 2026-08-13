@@ -9,7 +9,7 @@ import type {
   AutomatonConfig,
   AutomatonDatabase,
   AutomatonIdentity,
-  ConwayClient,
+  RuntimeClient,
   SurvivalTier,
 } from "../types.js";
 import { formatCredits } from "./tiers.js";
@@ -30,7 +30,7 @@ export async function executeFundingStrategies(
   identity: AutomatonIdentity,
   config: AutomatonConfig,
   db: AutomatonDatabase,
-  conway: ConwayClient,
+  conway: RuntimeClient,
 ): Promise<FundingAttempt[]> {
   const attempts: FundingAttempt[] = [];
   const rawCredits = db.getKV("local_credit_balance_cents");

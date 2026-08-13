@@ -7,7 +7,7 @@
 
 import type {
   AutomatonDatabase,
-  ConwayClient,
+  RuntimeClient,
   AutomatonIdentity,
   FinancialState,
   SurvivalTier,
@@ -27,7 +27,7 @@ export interface ResourceStatus {
  */
 export async function checkResources(
   identity: AutomatonIdentity,
-  conway: ConwayClient,
+  conway: RuntimeClient,
   db: AutomatonDatabase,
 ): Promise<ResourceStatus> {
   const creditsCents = readLocalCreditBalance(db);

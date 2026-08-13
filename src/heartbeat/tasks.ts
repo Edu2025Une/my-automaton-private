@@ -85,41 +85,6 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
     return { shouldWake: false };
   },
 
-  check_for_updates: async (_ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
-    try {
-      const { checkUpstream, getRepoInfo } = await import("../self-mod/upstream.js");
-      const repo = getRepoInfo();
-      const upstream = checkUpstream();
-      taskCtx.db.setKV("upstream_status", JSON.stringify({
-        ...upstream,
-        ...repo,
-        checkedAt: new Date().toISOString(),
-      }));
-      if (upstream.behind > 0) {
-        // Only wake if the commit count changed since last check
-        const prevBehind = taskCtx.db.getKV("upstream_prev_behind");
-        const behindStr = String(upstream.behind);
-        if (prevBehind !== behindStr) {
-          taskCtx.db.setKV("upstream_prev_behind", behindStr);
-          return {
-            shouldWake: true,
-            message: `${upstream.behind} new commit(s) on origin/main. Review with review_upstream_changes, then cherry-pick what you want with pull_upstream.`,
-          };
-        }
-      } else {
-        taskCtx.db.deleteKV("upstream_prev_behind");
-      }
-      return { shouldWake: false };
-    } catch (err: any) {
-      // Not a git repo or no remote -- silently skip
-      taskCtx.db.setKV("upstream_status", JSON.stringify({
-        error: err.message,
-        checkedAt: new Date().toISOString(),
-      }));
-      return { shouldWake: false };
-    }
-  },
-
   // === Phase 2.1: Soul Reflection ===
   soul_reflection: async (_ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
     try {
@@ -146,61 +111,6 @@ export const BUILTIN_TASKS: Record<string, HeartbeatTaskFn> = {
       logger.error("soul_reflection failed", error instanceof Error ? error : undefined);
       return { shouldWake: false };
     }
-  },
-
-  // === Phase 2.3: Model Registry Refresh ===
-  refresh_models: async (_ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
-    try {
-      const models = await taskCtx.conway.listModels();
-      if (models.length > 0) {
-        const { ModelRegistry } = await import("../inference/registry.js");
-        const registry = new ModelRegistry(taskCtx.db.raw);
-        registry.initialize(); // seed if empty
-        registry.refreshFromApi(models);
-        taskCtx.db.setKV("last_model_refresh", JSON.stringify({
-          count: models.length,
-          timestamp: new Date().toISOString(),
-        }));
-      }
-    } catch (error) {
-      logger.error("refresh_models failed", error instanceof Error ? error : undefined);
-    }
-    return { shouldWake: false };
-  },
-
-  health_check: async (_ctx: TickContext, taskCtx: HeartbeatLegacyContext) => {
-    // Check that the sandbox is healthy
-    try {
-      const result = await taskCtx.conway.exec("echo alive", 5000);
-      if (result.exitCode !== 0) {
-        // Only wake on first failure, not repeated failures
-        const prevStatus = taskCtx.db.getKV("health_check_status");
-        if (prevStatus !== "failing") {
-          taskCtx.db.setKV("health_check_status", "failing");
-          return {
-            shouldWake: true,
-            message: "Health check failed: sandbox exec returned non-zero",
-          };
-        }
-        return { shouldWake: false };
-      }
-    } catch (err: any) {
-      // Only wake on first failure, not repeated failures
-      const prevStatus = taskCtx.db.getKV("health_check_status");
-      if (prevStatus !== "failing") {
-        taskCtx.db.setKV("health_check_status", "failing");
-        return {
-          shouldWake: true,
-          message: `Health check failed: ${err.message}`,
-        };
-      }
-      return { shouldWake: false };
-    }
-
-    // Health check passed — clear failure state
-    taskCtx.db.setKV("health_check_status", "ok");
-    taskCtx.db.setKV("last_health_check", new Date().toISOString());
-    return { shouldWake: false };
   },
 
   // === Phase 4.1: Metrics Reporting ===

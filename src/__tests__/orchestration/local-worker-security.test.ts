@@ -3,12 +3,12 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GeneralHarness } from "../../agent/harnesses/general-harness.js";
 import type { HarnessContext } from "../../agent/harness-types.js";
-import type { ConwayClient } from "../../types.js";
+import type { RuntimeClient } from "../../types.js";
 import { AgentWorkspace } from "../../orchestration/workspace.js";
 import { createInMemoryDb } from "./test-db.js";
 import { createTestConfig, createTestIdentity } from "../mocks.js";
 
-function createConwayStub(overrides?: Partial<ConwayClient>): ConwayClient {
+function createConwayStub(overrides?: Partial<RuntimeClient>): RuntimeClient {
   return {
     exec: async () => ({ stdout: "", stderr: "", exitCode: 0 }),
     writeFile: async () => undefined,
@@ -22,7 +22,7 @@ function createConwayStub(overrides?: Partial<ConwayClient>): ConwayClient {
     deleteDnsRecord: async () => undefined,
     listModels: async () => [],
     ...overrides,
-  } as ConwayClient;
+  } as RuntimeClient;
 }
 
 describe("agent/general-harness security", () => {
@@ -39,7 +39,7 @@ describe("agent/general-harness security", () => {
     rmSync(testRoot, { recursive: true, force: true });
   });
 
-  async function createHarness(conway: ConwayClient) {
+  async function createHarness(conway: RuntimeClient) {
     const harness = new GeneralHarness();
     const workspace = new AgentWorkspace("goal-test", path.join(testRoot, "workspace"));
     const context: HarnessContext = {
@@ -95,7 +95,7 @@ describe("agent/general-harness security", () => {
   }
 
   async function runTool(
-    conway: ConwayClient,
+    conway: RuntimeClient,
     toolName: string,
     args: Record<string, unknown>,
   ): Promise<string> {

@@ -8,7 +8,7 @@
 import { getAutomatonDir } from "./identity/wallet.js";
 import { loadConfig, resolvePath } from "./config.js";
 import { createDatabase } from "./state/database.js";
-import { createInferenceClient } from "./conway/inference.js";
+import { createInferenceClient } from "./inference/inference.js";
 import {
   loadHeartbeatConfig,
   syncHeartbeatToDb,
@@ -27,7 +27,7 @@ import { prettySink } from "./observability/pretty-sink.js";
 import { randomUUID } from "crypto";
 import {
   assertStandaloneInferenceConfigured,
-  createStandaloneConwayClient,
+  createStandaloneRuntimeClient,
   STANDALONE_PROVIDER_ERROR,
 } from "./standalone.js";
 import {
@@ -225,7 +225,7 @@ async function run(): Promise<void> {
     db.setIdentity("automatonId", automatonId);
   }
 
-  const conway = createStandaloneConwayClient();
+  const conway = createStandaloneRuntimeClient();
 
   // Resolve Ollama base URL: env var takes precedence over config
   const openaiApiKey = config.openaiApiKey || process.env.OPENAI_API_KEY;

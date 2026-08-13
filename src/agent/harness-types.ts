@@ -7,7 +7,7 @@ import type {
   AutomatonConfig,
   AutomatonIdentity,
   ChatMessage,
-  ConwayClient,
+  RuntimeClient,
   InferenceToolCall,
   InputSource,
   SpendTrackerInterface,
@@ -41,7 +41,7 @@ export interface HarnessContext {
   identity: AutomatonIdentity;
   config: AutomatonConfig;
   db: import("better-sqlite3").Database;
-  conway: ConwayClient;
+  conway: RuntimeClient;
   inference: WorkerInferenceClient;
   budget: IterationBudget;
   wisdom: AccumulatedWisdom;

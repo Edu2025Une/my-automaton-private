@@ -5,12 +5,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CodingHarness } from "../../agent/harnesses/coding-harness.js";
 import type { HarnessContext } from "../../agent/harness-types.js";
 import type { TaskResult } from "../../orchestration/task-graph.js";
-import type { ConwayClient } from "../../types.js";
+import type { RuntimeClient } from "../../types.js";
 import { AgentWorkspace } from "../../orchestration/workspace.js";
 import { createInMemoryDb } from "../orchestration/test-db.js";
 import { createTestConfig, createTestIdentity } from "../mocks.js";
 
-function createConwayStub(overrides?: Partial<ConwayClient>): ConwayClient {
+function createConwayStub(overrides?: Partial<RuntimeClient>): RuntimeClient {
   return {
     exec: async () => ({ stdout: "", stderr: "", exitCode: 0 }),
     writeFile: async () => undefined,
@@ -24,7 +24,7 @@ function createConwayStub(overrides?: Partial<ConwayClient>): ConwayClient {
     deleteDnsRecord: async () => undefined,
     listModels: async () => [],
     ...overrides,
-  } as ConwayClient;
+  } as RuntimeClient;
 }
 
 describe("agent/CodingHarness confinement", () => {
@@ -41,7 +41,7 @@ describe("agent/CodingHarness confinement", () => {
     rmSync(testRoot, { recursive: true, force: true });
   });
 
-  async function createHarness(conway: ConwayClient) {
+  async function createHarness(conway: RuntimeClient) {
     const harness = new CodingHarness();
     const workspace = new AgentWorkspace("goal-coding", path.join(testRoot, "workspace"));
     const context: HarnessContext = {
@@ -96,7 +96,7 @@ describe("agent/CodingHarness confinement", () => {
     return harness;
   }
 
-  async function runTool(conway: ConwayClient, toolName: string, args: Record<string, unknown>): Promise<string> {
+  async function runTool(conway: RuntimeClient, toolName: string, args: Record<string, unknown>): Promise<string> {
     const harness = await createHarness(conway);
     const tool = harness.getToolDefs().find((entry) => entry.name === toolName);
     if (!tool) throw new Error(`missing tool: ${toolName}`);

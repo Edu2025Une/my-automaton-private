@@ -16,7 +16,7 @@
 import fs from "fs";
 import path from "path";
 import type {
-  ConwayClient,
+  RuntimeClient,
   AutomatonDatabase,
 } from "../types.js";
 import { logModification } from "./audit-log.js";
@@ -218,7 +218,7 @@ function isRateLimited(db: AutomatonDatabase): boolean {
  * 7. Audit log entry
  */
 export async function editFile(
-  conway: ConwayClient,
+  conway: RuntimeClient,
   db: AutomatonDatabase,
   filePath: string,
   newContent: string,

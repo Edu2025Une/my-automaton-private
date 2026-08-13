@@ -9,7 +9,7 @@ import type {
   AutomatonIdentity,
   AutomatonConfig,
   AutomatonDatabase,
-  ConwayClient,
+  RuntimeClient,
   InferenceClient,
   AgentState,
   AgentTurn,
@@ -62,7 +62,7 @@ export interface AgentLoopOptions {
   identity: AutomatonIdentity;
   config: AutomatonConfig;
   db: AutomatonDatabase;
-  conway: ConwayClient;
+  conway: RuntimeClient;
   inference: InferenceClient;
   skills?: Skill[];
   policyEngine?: PolicyEngine;

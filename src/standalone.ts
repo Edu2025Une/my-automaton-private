@@ -1,6 +1,6 @@
 import type {
   AutomatonConfig,
-  ConwayClient,
+  RuntimeClient,
   DomainRegistration,
   DomainSearchResult,
   DnsRecord,
@@ -106,7 +106,7 @@ export function getStandaloneBootstrapExternalUrls(
   return [];
 }
 
-export function createStandaloneConwayClient(): ConwayClient {
+export function createStandaloneRuntimeClient(): RuntimeClient {
   const disabled = async (): Promise<never> => {
     throw new Error("Conway control-plane operations are disabled in standalone runtime mode.");
   };

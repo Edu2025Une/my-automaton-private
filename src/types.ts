@@ -153,7 +153,7 @@ export interface ToolContext {
   identity: AutomatonIdentity;
   config: AutomatonConfig;
   db: AutomatonDatabase;
-  conway: ConwayClient;
+  conway: RuntimeClient;
   inference: InferenceClient;
 }
 
@@ -333,7 +333,7 @@ export interface InferenceToolDefinition {
 
 // ─── Conway Client ───────────────────────────────────────────────
 
-export interface ConwayClient {
+export interface RuntimeClient {
   exec(command: string, timeout?: number): Promise<ExecResult>;
   writeFile(path: string, content: string): Promise<void>;
   readFile(path: string): Promise<string>;
@@ -790,7 +790,7 @@ export interface HeartbeatLegacyContext {
   identity: AutomatonIdentity;
   config: AutomatonConfig;
   db: AutomatonDatabase;
-  conway: ConwayClient;
+  conway: RuntimeClient;
 }
 
 export interface HeartbeatScheduleRow {

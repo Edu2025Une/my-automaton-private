@@ -11,7 +11,7 @@ import * as yaml from "yaml";
 import type {
   Skill,
   AutomatonDatabase,
-  ConwayClient,
+  RuntimeClient,
 } from "../types.js";
 
 const SKILL_NAME_RE = /^[a-zA-Z0-9-]+$/;
@@ -168,7 +168,7 @@ export async function createSkill(
   instructions: string,
   skillsDir: string,
   db: AutomatonDatabase,
-  _conway: ConwayClient,
+  _conway: RuntimeClient,
 ): Promise<Skill> {
   assertValidSkillName(name);
 
@@ -211,7 +211,7 @@ export async function createSkill(
 export async function removeSkill(
   name: string,
   db: AutomatonDatabase,
-  _conway: ConwayClient,
+  _conway: RuntimeClient,
   skillsDir: string,
   deleteFiles: boolean = false,
 ): Promise<void> {

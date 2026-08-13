@@ -5,13 +5,13 @@
  * Used for both state versioning and code development.
  */
 
-import type { ConwayClient, GitStatus, GitLogEntry } from "../types.js";
+import type { RuntimeClient, GitStatus, GitLogEntry } from "../types.js";
 
 /**
  * Get git status for a repository.
  */
 export async function gitStatus(
-  conway: ConwayClient,
+  conway: RuntimeClient,
   repoPath: string,
 ): Promise<GitStatus> {
   const result = await conway.exec(
@@ -59,7 +59,7 @@ export async function gitStatus(
  * Get git diff output.
  */
 export async function gitDiff(
-  conway: ConwayClient,
+  conway: RuntimeClient,
   repoPath: string,
   staged: boolean = false,
 ): Promise<string> {
@@ -75,7 +75,7 @@ export async function gitDiff(
  * Create a git commit.
  */
 export async function gitCommit(
-  conway: ConwayClient,
+  conway: RuntimeClient,
   repoPath: string,
   message: string,
   addAll: boolean = true,
@@ -100,7 +100,7 @@ export async function gitCommit(
  * Get git log.
  */
 export async function gitLog(
-  conway: ConwayClient,
+  conway: RuntimeClient,
   repoPath: string,
   limit: number = 10,
 ): Promise<GitLogEntry[]> {
@@ -125,7 +125,7 @@ export async function gitLog(
  * Push to remote.
  */
 export async function gitPush(
-  conway: ConwayClient,
+  conway: RuntimeClient,
   repoPath: string,
   remote: string = "origin",
   branch?: string,
@@ -147,7 +147,7 @@ export async function gitPush(
  * Manage branches.
  */
 export async function gitBranch(
-  conway: ConwayClient,
+  conway: RuntimeClient,
   repoPath: string,
   action: "list" | "create" | "checkout" | "delete",
   branchName?: string,
@@ -182,7 +182,7 @@ export async function gitBranch(
  * Clone a repository.
  */
 export async function gitClone(
-  conway: ConwayClient,
+  conway: RuntimeClient,
   url: string,
   targetPath: string,
   depth?: number,
@@ -206,7 +206,7 @@ export async function gitClone(
  * Initialize a git repository.
  */
 export async function gitInit(
-  conway: ConwayClient,
+  conway: RuntimeClient,
   repoPath: string,
 ): Promise<string> {
   const result = await conway.exec(

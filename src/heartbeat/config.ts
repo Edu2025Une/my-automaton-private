@@ -21,18 +21,6 @@ const DEFAULT_HEARTBEAT_CONFIG: HeartbeatConfig = {
       task: "heartbeat_ping",
       enabled: true,
     },
-    {
-      name: "check_for_updates",
-      schedule: "0 */4 * * *",
-      task: "check_for_updates",
-      enabled: true,
-    },
-    {
-      name: "health_check",
-      schedule: "*/30 * * * *",
-      task: "health_check",
-      enabled: true,
-    },
   ],
   defaultIntervalMs: 60_000,
   lowComputeMultiplier: 4,

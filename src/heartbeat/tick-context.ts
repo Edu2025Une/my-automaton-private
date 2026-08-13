@@ -8,7 +8,7 @@
 import type BetterSqlite3 from "better-sqlite3";
 
 import type {
-  ConwayClient,
+  RuntimeClient,
   HeartbeatConfig,
   TickContext,
 } from "../types.js";
@@ -37,7 +37,7 @@ function generateTickId(): string {
  */
 export async function buildTickContext(
   db: DatabaseType,
-  conway: ConwayClient,
+  conway: RuntimeClient,
   config: HeartbeatConfig,
   walletAddress?: string,
   chainType?: string,

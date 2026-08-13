@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { describe, expect, it } from "vitest";
 import { createConfig } from "../config.js";
-import { createInferenceClient } from "../conway/inference.js";
+import { createInferenceClient } from "../inference/inference.js";
 import { DEFAULT_CONFIG } from "../types.js";
 import { createBuiltinTools, executeTool, REMOVED_STANDALONE_TOOL_NAMES, toolsToInferenceFormat } from "../agent/tools.js";
 import { createTestConfig, createTestIdentity, MockConwayClient, MockInferenceClient } from "./mocks.js";
@@ -184,10 +184,19 @@ describe("standalone runtime mode", () => {
     expect(configSource).not.toContain("check_social_inbox");
     expect(tasksSource).not.toContain("check_child_health");
     expect(tasksSource).not.toContain("prune_dead_children");
+    expect(tasksSource).not.toContain("health_check");
+    expect(tasksSource).not.toContain("refresh_models");
     expect(configSource).not.toContain("check_child_health");
     expect(configSource).not.toContain("prune_dead_children");
+    expect(configSource).not.toContain("health_check");
+    expect(configSource).not.toContain("refresh_models");
     expect(toolNames.has("send_message")).toBe(false);
     expect(toolNames.has("check_social_inbox")).toBe(false);
+    expect(toolNames.has("list_models")).toBe(false);
+    expect(toolNames.has("review_upstream_changes")).toBe(false);
+    expect(toolNames.has("pull_upstream")).toBe(false);
+    expect(toolNames.has("git_clone")).toBe(false);
+    expect(toolNames.has("git_push")).toBe(false);
   });
 
   it("removes the provision command from the CLI entrypoint", () => {
@@ -205,7 +214,7 @@ describe("standalone runtime mode", () => {
       "../setup/configure.ts",
       "../setup/defaults.ts",
       "../agent/loop.ts",
-      "../conway/inference.ts",
+      "../inference/inference.ts",
       "../heartbeat/tasks.ts",
       "../heartbeat/config.ts",
       "../agent/tools.ts",
