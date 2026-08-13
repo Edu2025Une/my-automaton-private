@@ -63,6 +63,7 @@ export interface AgentLoopOptions {
   config: AutomatonConfig;
   db: AutomatonDatabase;
   conway: RuntimeClient;
+  execution?: import("../types.js").ExecutionRuntime;
   inference: InferenceClient;
   skills?: Skill[];
   policyEngine?: PolicyEngine;
@@ -90,6 +91,7 @@ export async function runAgentLoop(
     config,
     db,
     conway,
+    execution: options.execution,
     inference,
   };
 

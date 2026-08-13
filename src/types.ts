@@ -152,6 +152,7 @@ export interface ToolContext {
   config: AutomatonConfig;
   db: AutomatonDatabase;
   conway: RuntimeClient;
+  execution?: ExecutionRuntime;
   inference: InferenceClient;
 }
 
@@ -357,6 +358,12 @@ export interface ExecResult {
   stdout: string;
   stderr: string;
   exitCode: number;
+}
+
+export interface ExecutionRuntime {
+  exec(command: string, timeout?: number): Promise<ExecResult>;
+  writeFile(path: string, content: string): Promise<void>;
+  readFile(path: string): Promise<string>;
 }
 
 export interface PortInfo {

@@ -34,6 +34,7 @@ import {
   resolveExplicitStandaloneProvider,
   resolveOpenRouterConfig,
 } from "./inference/provider-config.js";
+import { LocalExecutionRuntime } from "./infrastructure/execution/local-execution.js";
 
 const logger = createLogger("main");
 const VERSION = "0.2.1";
@@ -226,6 +227,7 @@ async function run(): Promise<void> {
   }
 
   const conway = createStandaloneRuntimeClient();
+  const execution = new LocalExecutionRuntime();
 
   // Resolve Ollama base URL: env var takes precedence over config
   const openaiApiKey = config.openaiApiKey || process.env.OPENAI_API_KEY;
@@ -310,6 +312,7 @@ async function run(): Promise<void> {
         config,
         db,
         conway,
+        execution,
         inference,
         skills,
         policyEngine,

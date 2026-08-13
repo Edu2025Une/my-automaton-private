@@ -5,7 +5,6 @@
  * Tools are organized by category and exposed to the inference model.
  */
 
-import nodePath from "node:path";
 import { ulid } from "ulid";
 import type {
   AutomatonTool,
@@ -18,6 +17,7 @@ import type {
   PolicyRequest,
   InputSource,
   SpendTrackerInterface,
+  ExecutionRuntime,
 } from "../types.js";
 import type { PolicyEngine } from "./policy-engine.js";
 import { sanitizeToolResult, sanitizeInput } from "./injection-defense.js";
@@ -25,29 +25,9 @@ import { createLogger } from "../observability/logger.js";
 
 const logger = createLogger("tools");
 
-// ─── Path Confinement ─────────────────────────────────────────
-// write_file is restricted to the sandbox home directory tree.
-// The sandbox home is /root for both local and remote execution.
-const SANDBOX_HOME = "/root";
-
-/**
- * Validate that a file path resolves to within the allowed root directory.
- * Returns the resolved absolute path, or an error string if out of bounds.
- */
-function confinePathToSandbox(filePath: string): string | { error: string } {
-  // Resolve ~ to SANDBOX_HOME
-  const expanded = filePath.startsWith("~")
-    ? nodePath.join(SANDBOX_HOME, filePath.slice(1))
-    : filePath;
-  // Resolve to absolute (relative paths resolve against SANDBOX_HOME)
-  const resolved = nodePath.resolve(SANDBOX_HOME, expanded);
-  // Ensure the resolved path is within the sandbox home
-  if (resolved !== SANDBOX_HOME && !resolved.startsWith(SANDBOX_HOME + "/")) {
-    return {
-      error: `Blocked: write_file path "${filePath}" resolves to "${resolved}" which is outside the allowed directory (${SANDBOX_HOME}). Writes are confined to the sandbox home.`,
-    };
-  }
-  return resolved;
+function getExecutionRuntime(ctx: ToolContext): ExecutionRuntime {
+  if (!ctx.execution) throw new Error("Local execution runtime is not configured.");
+  return ctx.execution;
 }
 
 // Tools whose results come from external sources and need sanitization
@@ -150,7 +130,7 @@ export function createBuiltinTools(sandboxId: string): AutomatonTool[] {
         const forbidden = isForbiddenCommand(command, ctx.identity.sandboxId);
         if (forbidden) return forbidden;
 
-        const result = await ctx.conway.exec(
+        const result = await getExecutionRuntime(ctx).exec(
           command,
           (args.timeout as number) || 30000,
         );
@@ -172,16 +152,13 @@ export function createBuiltinTools(sandboxId: string): AutomatonTool[] {
       },
       execute: async (args, ctx) => {
         const filePath = args.path as string;
-        // Path confinement: restrict writes to sandbox home directory
-        const confined = confinePathToSandbox(filePath);
-        if (typeof confined === "object") return confined.error;
         // Guard against overwriting protected files (same check as edit_own_file)
         const { isProtectedFile } = await import("../self-mod/code.js");
-        if (isProtectedFile(confined)) {
+        if (isProtectedFile(filePath)) {
           return "Blocked: Cannot overwrite protected file. This is a hard-coded safety invariant.";
         }
-        await ctx.conway.writeFile(confined, args.content as string);
-        return `File written: ${confined}`;
+        await getExecutionRuntime(ctx).writeFile(filePath, args.content as string);
+        return `File written: ${filePath}`;
       },
     },
     {
@@ -209,19 +186,7 @@ export function createBuiltinTools(sandboxId: string): AutomatonTool[] {
         ) {
           return "Blocked: Cannot read sensitive file. This protects credentials and secrets.";
         }
-        try {
-          return await ctx.conway.readFile(filePath);
-        } catch {
-          // Conway files/read API may be broken — fall back to exec(cat)
-          const result = await ctx.conway.exec(
-            `cat ${escapeShellArg(filePath)}`,
-            30_000,
-          );
-          if (result.exitCode !== 0) {
-            return `ERROR: File not found or not readable: ${filePath}`;
-          }
-          return result.stdout;
-        }
+        return await getExecutionRuntime(ctx).readFile(filePath);
       },
     },
     {
