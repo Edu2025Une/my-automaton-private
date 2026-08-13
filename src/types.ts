@@ -59,8 +59,6 @@ export interface AutomatonConfig {
   // Phase 2 config additions
   soulConfig?: SoulConfig;
   modelStrategy?: ModelStrategyConfig;
-  /** Custom RPC endpoint for Base chain interactions (overrides default public RPC) */
-  rpcUrl?: string;
   /** Chain type for this automaton. Defaults to "evm" if absent. */
   chainType?: ChainType;
 }

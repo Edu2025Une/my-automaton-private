@@ -295,8 +295,6 @@ async function configureGeneral(config: AutomatonConfig): Promise<void> {
     ["debug", "info", "warn", "error"] as const,
     config.logLevel,
   );
-  config.rpcUrl = (await askString("RPC endpoint  (Base chain, e.g. https://mainnet.base.org)", config.rpcUrl)) || undefined;
-
   console.log("");
 }
 

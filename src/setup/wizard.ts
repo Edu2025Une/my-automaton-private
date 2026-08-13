@@ -3,7 +3,7 @@ import path from "path";
 import chalk from "chalk";
 import type { AutomatonConfig, TreasuryPolicy } from "../types.js";
 import { DEFAULT_TREASURY_POLICY } from "../types.js";
-import { getAutomatonDir } from "../identity/wallet.js";
+import { getAutomatonDir } from "../runtime/paths.js";
 import { createConfig, saveConfig } from "../config.js";
 import { writeDefaultHeartbeatConfig } from "../heartbeat/config.js";
 import { showBanner } from "./banner.js";

@@ -5,7 +5,7 @@
  * Entry point for the standalone AI agent.
  */
 
-import { getAutomatonDir } from "./identity/wallet.js";
+import { getAutomatonDir } from "./runtime/paths.js";
 import { loadConfig, resolvePath } from "./config.js";
 import { createDatabase } from "./state/database.js";
 import { createInferenceClient } from "./inference/inference.js";

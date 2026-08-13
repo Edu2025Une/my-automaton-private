@@ -261,6 +261,8 @@ describe("standalone runtime mode", () => {
       "SOLANA_RPC_URL",
       "getWallet(",
       "loadWalletAccount(",
+      "identity/wallet",
+      "rpcUrl",
     ];
 
     for (const file of files) {

@@ -8,7 +8,7 @@ import fs from "fs";
 import path from "path";
 import YAML from "yaml";
 import type { HeartbeatEntry, HeartbeatConfig, AutomatonDatabase } from "../types.js";
-import { getAutomatonDir } from "../identity/wallet.js";
+import { getAutomatonDir } from "../runtime/paths.js";
 import { createLogger } from "../observability/logger.js";
 
 const logger = createLogger("heartbeat.config");
