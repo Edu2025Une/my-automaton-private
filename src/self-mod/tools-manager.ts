@@ -1,7 +1,7 @@
 /**
  * Tools Manager
  *
- * Manages installation and configuration of external tools and MCP servers.
+ * Manages operator-installed local tools.
  */
 
 import type {
@@ -55,40 +55,6 @@ export async function installNpmPackage(
   logModification(db, "tool_install", `Installed npm package: ${packageName}`, {
     reversible: true,
   });
-
-  return { success: true };
-}
-
-/**
- * Install an MCP server.
- * The automaton can add new capabilities by installing MCP servers.
- */
-export async function installMcpServer(
-  conway: RuntimeClient,
-  db: AutomatonDatabase,
-  name: string,
-  command: string,
-  args?: string[],
-  env?: Record<string, string>,
-): Promise<{ success: boolean; error?: string }> {
-  // Record in database
-  const tool: InstalledTool = {
-    id: ulid(),
-    name: `mcp:${name}`,
-    type: "mcp",
-    config: { command, args, env },
-    installedAt: new Date().toISOString(),
-    enabled: true,
-  };
-
-  db.installTool(tool);
-
-  logModification(
-    db,
-    "mcp_install",
-    `Installed MCP server: ${name} (${command})`,
-    { reversible: true },
-  );
 
   return { success: true };
 }

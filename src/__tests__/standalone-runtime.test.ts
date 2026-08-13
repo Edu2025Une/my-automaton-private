@@ -263,6 +263,7 @@ describe("standalone runtime mode", () => {
       "loadWalletAccount(",
       "identity/wallet",
       "rpcUrl",
+      "install_mcp_server",
     ];
 
     for (const file of files) {
@@ -271,5 +272,23 @@ describe("standalone runtime mode", () => {
         expect(source, `${file} contains ${value}`).not.toContain(value);
       }
     }
+  });
+
+  it("does not load historical MCP records into the agent tool catalog", async () => {
+    const { loadInstalledTools } = await import("../agent/tools.js");
+    const tools = loadInstalledTools({
+      getInstalledTools: () => [
+        {
+          id: "mcp-legacy",
+          name: "mcp:legacy",
+          type: "mcp",
+          config: { command: "node", args: ["server.js"] },
+          installedAt: new Date().toISOString(),
+          enabled: true,
+        },
+      ],
+    });
+
+    expect(tools).toEqual([]);
   });
 });

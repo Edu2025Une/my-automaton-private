@@ -2117,8 +2117,8 @@ Model: ${ctx.inference.getDefaultModel()}
 }
 
 /**
- * Load installed tools from the database and return as AutomatonTool[].
- * Installed tools are dynamically added from the installed_tools table.
+ * Load only executable non-MCP tools from the database. MCP records remain
+ * historical metadata and are never exposed to the agent or executor.
  */
 export function loadInstalledTools(db: {
   getInstalledTools: () => {
@@ -2133,11 +2133,12 @@ export function loadInstalledTools(db: {
   try {
     const installed = db.getInstalledTools();
     return installed
+      .filter((tool) => tool.type !== "mcp")
       .filter((tool) => !REMOVED_STANDALONE_TOOL_NAMES.has(tool.name))
       .map((tool) => ({
       name: tool.name,
       description: `Installed tool: ${tool.name}`,
-      category: (tool.type === "mcp" ? "conway" : "vm") as ToolCategory,
+      category: "vm" as ToolCategory,
       riskLevel: "caution" as RiskLevel,
       parameters: (tool.config?.parameters as Record<string, unknown>) || {
         type: "object",
@@ -2160,10 +2161,6 @@ function createInstalledToolExecutor(tool: {
   config?: Record<string, unknown>;
 }): AutomatonTool["execute"] {
   return async (args, ctx) => {
-    if (tool.type === "mcp") {
-      // MCP tools would be executed via MCP protocol
-      return `MCP tool ${tool.name} invoked with args: ${JSON.stringify(args)}`;
-    }
     // Generic installed tool — execute via sandbox shell if command is configured
     const command = tool.config?.command as string | undefined;
     if (command) {
