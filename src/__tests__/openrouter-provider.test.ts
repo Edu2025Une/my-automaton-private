@@ -11,6 +11,7 @@ import {
   getIndependentInferenceProvider,
 } from "../standalone.js";
 import { chatViaOpenRouter } from "../inference/providers/openrouter.js";
+import { InferenceRouter } from "../inference/router.js";
 
 const ORIGINAL_ENV = { ...process.env };
 const fetchCalls: Array<{ url: string; init: RequestInit }> = [];
@@ -99,11 +100,25 @@ describe("OpenRouter standalone provider", () => {
     }
   });
 
-  it("requires exactly one of OPENROUTER_MODEL or OPENROUTER_PRESET", () => {
-    expect(() => resolveOpenRouterConfig(strictOpenRouterEnv({ OPENROUTER_MODEL: "" })))
-      .toThrow(/Invalid OpenRouter configuration/);
-    expect(() => resolveOpenRouterConfig(strictOpenRouterEnv({ OPENROUTER_PRESET: "@preset/team" })))
-      .toThrow(/Invalid OpenRouter configuration/);
+  it("uses free when no model or preset is configured", () => {
+    const config = resolveOpenRouterConfig(strictOpenRouterEnv({
+      OPENROUTER_MODEL: "",
+      OPENROUTER_ALLOWED_PROVIDERS: "openai",
+    }));
+    expect(config.model).toBe("free");
+  });
+
+  it("InferenceRouter selects the explicit model or free without consulting strategy defaults", () => {
+    const makeRouter = (defaultModel?: string) => new InferenceRouter(
+      {} as any,
+      {} as any,
+      {} as any,
+      { provider: "openrouter", defaultModel },
+    );
+
+    expect(makeRouter().selectModel("high", "agent_turn")?.modelId).toBe("free");
+    expect(makeRouter("openai/gpt-oss-20b:free").selectModel("high", "agent_turn")?.modelId)
+      .toBe("openai/gpt-oss-20b:free");
   });
 
   it("validates preset format", () => {
@@ -193,6 +208,16 @@ describe("OpenRouter standalone provider", () => {
     expect(result.toolCalls?.[0].function.name).toBe("read_file");
   });
 
+  it("sends free when OpenRouter has no model configured", async () => {
+    const config = resolveOpenRouterConfig(strictOpenRouterEnv({ OPENROUTER_MODEL: "" }));
+    const client = createInferenceClient({ defaultModel: "gpt-5.2", maxTokens: 128, openRouter: config });
+
+    await client.chat([{ role: "user", content: "hello" }]);
+
+    expect(lastRequestBody().model).toBe("free");
+    expect(lastRequestBody().model).not.toBe("gpt-5.2");
+  });
+
   it("sends preset as model", async () => {
     const config = resolveOpenRouterConfig(strictOpenRouterEnv({
       OPENROUTER_MODEL: "",
@@ -238,7 +263,7 @@ describe("OpenRouter standalone provider", () => {
     expect(config.routing.allowFallbacks).toBe(false);
     expect(config.routing.requireParameters).toBe(true);
     expect(config.routing.dataCollection).toBe("deny");
-    expect(config.routing.zdr).toBe(true);
+    expect(config.routing.zdr).toBe(false);
 
     expect(() => resolveOpenRouterConfig(strictOpenRouterEnv({
       OPENROUTER_ROUTING_MODE: "balanced",

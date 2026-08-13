@@ -21,6 +21,7 @@ import type {
   SpendTrackerInterface,
   InputSource,
   ModelStrategyConfig,
+  ModelProvider,
 } from "../types.js";
 import { DEFAULT_MODEL_STRATEGY_CONFIG } from "../types.js";
 import type { PolicyEngine } from "./policy-engine.js";
@@ -71,6 +72,8 @@ export interface AgentLoopOptions {
   onStateChange?: (state: AgentState) => void;
   onTurnComplete?: (turn: AgentTurn) => void;
   ollamaBaseUrl?: string;
+  inferenceProvider?: ModelProvider;
+  inferenceModel?: string;
 }
 
 /**
@@ -105,7 +108,10 @@ export async function runAgentLoop(
 
   // Avoid automatic network discovery during startup; explicit model picking can refresh Ollama.
   const budgetTracker = new InferenceBudgetTracker(db.raw, modelStrategyConfig);
-  const inferenceRouter = new InferenceRouter(db.raw, modelRegistry, budgetTracker);
+  const inferenceRouter = new InferenceRouter(db.raw, modelRegistry, budgetTracker, {
+    provider: options.inferenceProvider,
+    defaultModel: options.inferenceModel,
+  });
 
   // Orchestration/sandbox spawning is disabled in standalone mode until rebuilt as local-only.
   // Set start time

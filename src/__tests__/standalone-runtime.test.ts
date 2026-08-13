@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { describe, expect, it } from "vitest";
-import { createConfig } from "../config.js";
+import { createConfig, resolveEffectiveInferenceModel } from "../config.js";
 import { createInferenceClient } from "../inference/inference.js";
 import { DEFAULT_CONFIG } from "../types.js";
 import { createBuiltinTools, executeTool, REMOVED_STANDALONE_TOOL_NAMES, toolsToInferenceFormat } from "../agent/tools.js";
@@ -53,6 +53,43 @@ describe("standalone runtime mode", () => {
     expect("conwayApiUrl" in config).toBe(false);
     expect((config as any).socialRelayUrl).toBeUndefined();
     expect(getStandaloneBootstrapExternalUrls(config)).toEqual([]);
+  });
+
+  it("uses the OpenRouter model or preset from the environment as the effective model", () => {
+    const config = createConfig({
+      name: "local-agent",
+      genesisPrompt: "Work locally.",
+      creatorAddress: "local://creator",
+      openaiApiKey: "test-openai-key",
+    });
+
+    expect(resolveEffectiveInferenceModel(config, {
+      INFERENCE_PROVIDER: "openrouter",
+      OPENROUTER_MODEL: "openai/gpt-oss-20b:free",
+    })).toBe("openai/gpt-oss-20b:free");
+    expect(resolveEffectiveInferenceModel(config, {
+      INFERENCE_PROVIDER: "openrouter",
+      OPENROUTER_PRESET: "@preset/free-agent",
+    })).toBe("@preset/free-agent");
+    expect(resolveEffectiveInferenceModel(config, {
+      INFERENCE_PROVIDER: "openrouter",
+    })).toBe("free");
+  });
+
+  it("preserves the configured model for OpenAI, Anthropic, and Ollama", () => {
+    const config = createConfig({
+      name: "local-agent",
+      genesisPrompt: "Work locally.",
+      creatorAddress: "local://creator",
+      openaiApiKey: "test-openai-key",
+    });
+
+    for (const provider of ["openai", "anthropic", "ollama"]) {
+      expect(resolveEffectiveInferenceModel(config, {
+        INFERENCE_PROVIDER: provider,
+        OPENROUTER_MODEL: "must-not-be-used",
+      })).toBe(config.inferenceModel);
+    }
   });
 
   it("standalone initialization does not require Conway credentials when an independent provider is configured", () => {

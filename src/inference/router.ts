@@ -24,15 +24,29 @@ import { DEFAULT_ROUTING_MATRIX, TASK_TIMEOUTS } from "./types.js";
 
 type Database = BetterSqlite3.Database;
 
+export interface InferenceRouterOptions {
+  provider?: ModelProvider;
+  defaultModel?: string;
+}
+
 export class InferenceRouter {
   private db: Database;
   private registry: ModelRegistry;
   private budget: InferenceBudgetTracker;
+  private provider?: ModelProvider;
+  private defaultModel?: string;
 
-  constructor(db: Database, registry: ModelRegistry, budget: InferenceBudgetTracker) {
+  constructor(
+    db: Database,
+    registry: ModelRegistry,
+    budget: InferenceBudgetTracker,
+    options: InferenceRouterOptions = {},
+  ) {
     this.db = db;
     this.registry = registry;
     this.budget = budget;
+    this.provider = options.provider;
+    this.defaultModel = options.defaultModel;
   }
 
   /**
@@ -190,6 +204,28 @@ export class InferenceRouter {
    *      (free/Ollama models are allowed at any tier, including dead)
    */
   selectModel(tier: SurvivalTier, taskType: InferenceTaskType): ModelEntry | null {
+    // OpenRouter has its own explicit model resolution. Do not consult the
+    // local routing matrix or modelStrategy, which may contain legacy defaults.
+    if (this.provider === "openrouter") {
+      return {
+        modelId: this.defaultModel || "free",
+        provider: "openrouter",
+        displayName: this.defaultModel || "free",
+        tierMinimum: "dead",
+        costPer1kInput: 0,
+        costPer1kOutput: 0,
+        maxTokens: 32768,
+        contextWindow: 1_000_000,
+        supportsTools: true,
+        supportsVision: true,
+        parameterStyle: "max_tokens",
+        enabled: true,
+        lastSeen: null,
+        createdAt: "",
+        updatedAt: "",
+      };
+    }
+
     const TIER_ORDER: Record<string, number> = {
       dead: 0, critical: 1, low_compute: 2, normal: 3, high: 4,
     };

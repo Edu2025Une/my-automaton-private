@@ -21,6 +21,28 @@ export function getConfigPath(): string {
 }
 
 /**
+ * Resolve the model used by the active standalone provider.
+ * OpenRouter is configured through environment variables so a clean install
+ * does not need a pre-populated automaton.json to select its model or preset.
+ */
+export function resolveEffectiveInferenceModel(
+  config: AutomatonConfig,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  if (env.INFERENCE_PROVIDER?.trim().toLowerCase() === "openrouter") {
+    const model = env.OPENROUTER_MODEL?.trim();
+    if (model) return model;
+
+    const preset = env.OPENROUTER_PRESET?.trim();
+    if (preset) return preset;
+
+    return "free";
+  }
+
+  return config.inferenceModel;
+}
+
+/**
  * Load the automaton config from disk.
  * Merges with defaults for any missing fields.
  */

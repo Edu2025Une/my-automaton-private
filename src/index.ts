@@ -6,7 +6,7 @@
  */
 
 import { getAutomatonDir } from "./runtime/paths.js";
-import { loadConfig, resolvePath } from "./config.js";
+import { loadConfig, resolveEffectiveInferenceModel, resolvePath } from "./config.js";
 import { createDatabase } from "./state/database.js";
 import { createInferenceClient } from "./inference/inference.js";
 import {
@@ -243,7 +243,7 @@ async function run(): Promise<void> {
   const modelRegistry = new ModelRegistry(db.raw);
   modelRegistry.initialize();
   const inference = createInferenceClient({
-    defaultModel: config.inferenceModel,
+    defaultModel: resolveEffectiveInferenceModel(config, process.env),
     maxTokens: config.maxTokensPerTurn,
     lowComputeModel: config.modelStrategy?.lowComputeModel || "gpt-5-mini",
     openaiApiKey,
@@ -326,6 +326,8 @@ async function run(): Promise<void> {
             `[${new Date().toISOString()}] Turn ${turn.id}: ${turn.toolCalls.length} tools, ${turn.tokenUsage.totalTokens} tokens`,
           );
         },
+        inferenceProvider: explicitProvider || undefined,
+        inferenceModel: resolveEffectiveInferenceModel(config, process.env),
       });
 
       // Agent loop exited (sleeping or dead)

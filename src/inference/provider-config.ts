@@ -77,7 +77,7 @@ export function resolveOpenRouterConfig(
 
   const model = env.OPENROUTER_MODEL?.trim();
   const preset = env.OPENROUTER_PRESET?.trim();
-  if ((model && preset) || (!model && !preset)) throw new Error(OPENROUTER_PROVIDER_ERROR);
+  if (model && preset) throw new Error(OPENROUTER_PROVIDER_ERROR);
   if (preset && !/^@preset\/[a-z0-9][a-z0-9._-]*$/i.test(preset)) {
     throw new Error(OPENROUTER_PROVIDER_ERROR);
   }
@@ -90,7 +90,7 @@ export function resolveOpenRouterConfig(
   return {
     provider: "openrouter",
     apiKey,
-    model: model || preset as string,
+    model: model || preset || "free",
     baseUrl,
     routing,
     headers,
@@ -197,7 +197,7 @@ function resolveOpenRouterRouting(env: NodeJS.ProcessEnv): OpenRouterRoutingConf
     allowFallbacks: parseBooleanEnv("OPENROUTER_ALLOW_FALLBACKS", env.OPENROUTER_ALLOW_FALLBACKS, false),
     requireParameters: parseBooleanEnv("OPENROUTER_REQUIRE_PARAMETERS", env.OPENROUTER_REQUIRE_PARAMETERS, true),
     dataCollection: parseDataCollection(env.OPENROUTER_DATA_COLLECTION),
-    zdr: parseBooleanEnv("OPENROUTER_ZDR", env.OPENROUTER_ZDR, true),
+    zdr: parseBooleanEnv("OPENROUTER_ZDR", env.OPENROUTER_ZDR, false),
   };
 }
 
