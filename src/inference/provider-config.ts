@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-export type StandaloneProvider = "openai" | "anthropic" | "ollama" | "openrouter";
+export type StandaloneProvider = "openai" | "anthropic" | "ollama" | "openrouter" | "groq";
 export type OpenRouterRoutingMode = "strict" | "balanced";
 export type OpenRouterDataCollection = "allow" | "deny";
 
@@ -30,7 +30,16 @@ export interface OpenRouterConfig {
   };
 }
 
+export interface GroqConfig {
+  provider: "groq";
+  apiKey: string;
+  model: string;
+  baseUrl: string;
+}
+
 const OPENROUTER_DEFAULT_BASE_URL = "https://openrouter.ai/api/v1";
+const GROQ_DEFAULT_BASE_URL = "https://api.groq.com/openai/v1";
+const GROQ_DEFAULT_MODEL = "llama-3.1-8b-instant";
 const OPENROUTER_PROVIDER_ERROR =
   "Invalid OpenRouter configuration. Check INFERENCE_PROVIDER, OPENROUTER_API_KEY, OPENROUTER_MODEL, OPENROUTER_PRESET, OPENROUTER_BASE_URL, OPENROUTER_ROUTING_MODE, OPENROUTER_ALLOWED_PROVIDERS, OPENROUTER_PROVIDER_ORDER, and boolean OpenRouter variables.";
 
@@ -59,10 +68,31 @@ export function resolveExplicitStandaloneProvider(
 ): StandaloneProvider | null {
   const value = env.INFERENCE_PROVIDER?.trim().toLowerCase();
   if (!value) return null;
-  if (value === "openai" || value === "anthropic" || value === "ollama" || value === "openrouter") {
+  if (value === "openai" || value === "anthropic" || value === "ollama" || value === "openrouter" || value === "groq") {
     return value;
   }
-  throw new Error("Invalid INFERENCE_PROVIDER. Use openai, anthropic, ollama, or openrouter.");
+  throw new Error("Invalid INFERENCE_PROVIDER. Use openai, anthropic, ollama, openrouter, or groq.");
+}
+
+export function resolveGroqConfig(
+  env: NodeJS.ProcessEnv = process.env,
+): GroqConfig {
+  const apiKey = env.GROQ_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error("Invalid Groq configuration. Check GROQ_API_KEY and GROQ_MODEL.");
+  }
+
+  const model = env.GROQ_MODEL?.trim() || GROQ_DEFAULT_MODEL;
+  if (hasControlCharacters(model)) {
+    throw new Error("Invalid Groq configuration. Check GROQ_API_KEY and GROQ_MODEL.");
+  }
+
+  return {
+    provider: "groq",
+    apiKey,
+    model,
+    baseUrl: GROQ_DEFAULT_BASE_URL,
+  };
 }
 
 export function resolveOpenRouterConfig(

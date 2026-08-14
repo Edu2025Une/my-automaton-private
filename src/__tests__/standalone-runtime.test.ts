@@ -130,6 +130,7 @@ describe("standalone runtime mode", () => {
     expect(getIndependentInferenceProvider({}, { OPENAI_API_KEY: "set" })).toBe("openai");
     expect(getIndependentInferenceProvider({}, { ANTHROPIC_API_KEY: "set" })).toBe("anthropic");
     expect(getIndependentInferenceProvider({}, { OLLAMA_BASE_URL: "http://localhost:11434" })).toBe("ollama");
+    expect(getIndependentInferenceProvider({}, { INFERENCE_PROVIDER: "groq", GROQ_API_KEY: "set" })).toBe("groq");
     expect(getIndependentInferenceProvider({}, {})).toBeNull();
   });
 

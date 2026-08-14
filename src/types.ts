@@ -1037,7 +1037,7 @@ export const DEFAULT_MEMORY_BUDGET: MemoryBudget = {
 
 // === Phase 2.3: Inference & Model Strategy Types ===
 
-export type ModelProvider = "openai" | "anthropic" | "openrouter" | "conway" | "ollama" | "other";
+export type ModelProvider = "openai" | "anthropic" | "openrouter" | "conway" | "ollama" | "groq" | "other";
 
 export type InferenceTaskType =
   | "agent_turn"

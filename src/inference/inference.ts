@@ -15,7 +15,7 @@ import type {
 } from "../types.js";
 import { ResilientHttpClient } from "../infrastructure/http/resilient-http-client.js";
 import { STANDALONE_PROVIDER_ERROR } from "../standalone.js";
-import type { OpenRouterConfig } from "../inference/provider-config.js";
+import type { GroqConfig, OpenRouterConfig } from "../inference/provider-config.js";
 import {
   chatViaOpenAiCompatible,
   formatOpenAiCompatibleMessage,
@@ -32,11 +32,12 @@ interface InferenceClientOptions {
   anthropicApiKey?: string;
   ollamaBaseUrl?: string;
   openRouter?: OpenRouterConfig;
+  groq?: GroqConfig;
   /** Optional registry lookup — if provided, used before name heuristics */
   getModelProvider?: (modelId: string) => string | undefined;
 }
 
-type InferenceBackend = "openai" | "anthropic" | "ollama" | "openrouter";
+type InferenceBackend = "openai" | "anthropic" | "ollama" | "openrouter" | "groq";
 
 function isLoopbackHttpUrl(url: string | undefined): boolean {
   if (!url) return false;
@@ -64,6 +65,7 @@ export function createInferenceClient(
     ollamaBaseUrl,
     openRouter,
     getModelProvider,
+    groq,
   } = options;
   const httpClient = new ResilientHttpClient({
     baseTimeout: INFERENCE_TIMEOUT_MS,
@@ -80,13 +82,13 @@ export function createInferenceClient(
     const model = opts?.model || currentModel;
     const tools = opts?.tools;
 
-    const backend = openRouter ? "openrouter" : resolveInferenceBackend(model, {
+    const backend = openRouter ? "openrouter" : groq ? "groq" : resolveInferenceBackend(model, {
         openaiApiKey,
         anthropicApiKey,
         ollamaBaseUrl,
         getModelProvider,
       });
-    const requestModel = openRouter ? openRouter.model : model;
+    const requestModel = openRouter ? openRouter.model : groq ? groq.model : model;
 
     // Newer models (o-series, gpt-5.x, gpt-4.1) require max_completion_tokens.
     // Ollama always uses max_tokens.
@@ -131,6 +133,21 @@ export function createInferenceClient(
       return chatViaOpenRouter({
         body,
         config: openRouter as OpenRouterConfig,
+        httpClient,
+        timeoutMs: INFERENCE_TIMEOUT_MS,
+      });
+    }
+
+    if (backend === "groq") {
+      if (!groq) {
+        throw new Error(STANDALONE_PROVIDER_ERROR);
+      }
+      return chatViaOpenAiCompatible({
+        model: requestModel,
+        body,
+        apiUrl: groq.baseUrl,
+        apiKey: groq.apiKey,
+        backend,
         httpClient,
         timeoutMs: INFERENCE_TIMEOUT_MS,
       });

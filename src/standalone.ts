@@ -11,6 +11,7 @@ import type {
 } from "./types.js";
 import {
   resolveExplicitStandaloneProvider,
+  resolveGroqConfig,
   resolveOpenRouterConfig,
 } from "./inference/provider-config.js";
 
@@ -24,7 +25,7 @@ export const CONWAY_HOST_PATTERNS = [
 ] as const;
 
 export const STANDALONE_PROVIDER_ERROR =
-  "Standalone runtime requires an independent inference provider. Configure OPENAI_API_KEY, ANTHROPIC_API_KEY, OLLAMA_BASE_URL, or INFERENCE_PROVIDER=openrouter with OPENROUTER_API_KEY and exactly one of OPENROUTER_MODEL or OPENROUTER_PRESET.";
+  "Standalone runtime requires an independent inference provider. Configure OPENAI_API_KEY, ANTHROPIC_API_KEY, OLLAMA_BASE_URL, GROQ_API_KEY, or INFERENCE_PROVIDER=openrouter with OPENROUTER_API_KEY and exactly one of OPENROUTER_MODEL or OPENROUTER_PRESET.";
 
 export function getRuntimeMode(config?: Partial<AutomatonConfig> | null): RuntimeMode {
   return "standalone";
@@ -61,7 +62,7 @@ export function disableConwayRuntimeFields<T extends Partial<AutomatonConfig>>(c
 export function getIndependentInferenceProvider(
   config: Partial<AutomatonConfig>,
   env: NodeJS.ProcessEnv = process.env,
-): "openai" | "anthropic" | "ollama" | "openrouter" | null {
+): "openai" | "anthropic" | "ollama" | "openrouter" | "groq" | null {
   const explicit = resolveExplicitStandaloneProvider(env);
   if (explicit === "openrouter") {
     resolveOpenRouterConfig(env);
@@ -79,9 +80,17 @@ export function getIndependentInferenceProvider(
     if (!env.OLLAMA_BASE_URL && !config.ollamaBaseUrl) throw new Error(STANDALONE_PROVIDER_ERROR);
     return "ollama";
   }
+  if (explicit === "groq") {
+    resolveGroqConfig(env);
+    return "groq";
+  }
   if (env.OPENAI_API_KEY || config.openaiApiKey) return "openai";
   if (env.ANTHROPIC_API_KEY || config.anthropicApiKey) return "anthropic";
   if (env.OLLAMA_BASE_URL || config.ollamaBaseUrl) return "ollama";
+  if (env.GROQ_API_KEY) {
+    resolveGroqConfig(env);
+    return "groq";
+  }
   return null;
 }
 

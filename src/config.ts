@@ -39,6 +39,10 @@ export function resolveEffectiveInferenceModel(
     return "openrouter/free";
   }
 
+  if (env.INFERENCE_PROVIDER?.trim().toLowerCase() === "groq") {
+    return env.GROQ_MODEL?.trim() || "llama-3.1-8b-instant";
+  }
+
   return config.inferenceModel;
 }
 

@@ -32,6 +32,7 @@ import {
 } from "./standalone.js";
 import {
   resolveExplicitStandaloneProvider,
+  resolveGroqConfig,
   resolveOpenRouterConfig,
 } from "./inference/provider-config.js";
 import { LocalExecutionRuntime } from "./infrastructure/execution/local-execution.js";
@@ -68,7 +69,9 @@ Environment:
   OPENAI_API_KEY           OpenAI API key for standalone inference
   ANTHROPIC_API_KEY        Anthropic API key for standalone inference
   OLLAMA_BASE_URL          Ollama base URL (overrides config, e.g. http://localhost:11434)
-  INFERENCE_PROVIDER       Optional explicit provider: openai, anthropic, ollama, openrouter
+  GROQ_API_KEY             Groq API key for standalone inference
+  GROQ_MODEL               Groq model (default: llama-3.1-8b-instant)
+  INFERENCE_PROVIDER       Optional explicit provider: openai, anthropic, ollama, openrouter, groq
   OPENROUTER_API_KEY       OpenRouter API key when INFERENCE_PROVIDER=openrouter
   OPENROUTER_MODEL         OpenRouter model; mutually exclusive with OPENROUTER_PRESET
   OPENROUTER_PRESET        OpenRouter preset in @preset/<slug> format
@@ -234,6 +237,9 @@ async function run(): Promise<void> {
   const anthropicApiKey = config.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
   const ollamaBaseUrl = process.env.OLLAMA_BASE_URL || config.ollamaBaseUrl;
   const explicitProvider = resolveExplicitStandaloneProvider(process.env);
+  const groq = explicitProvider === "groq" || (!explicitProvider && process.env.GROQ_API_KEY)
+    ? resolveGroqConfig(process.env)
+    : undefined;
   const openRouter = explicitProvider === "openrouter"
     ? resolveOpenRouterConfig(process.env)
     : undefined;
@@ -250,11 +256,14 @@ async function run(): Promise<void> {
     anthropicApiKey,
     ollamaBaseUrl,
     openRouter,
+    groq,
     getModelProvider: (modelId) => modelRegistry.get(modelId)?.provider,
   });
 
   if (openRouter) {
     logger.info(`[${new Date().toISOString()}] Inference provider: openrouter`);
+  } else if (groq) {
+    logger.info(`[${new Date().toISOString()}] Inference provider: groq`);
   } else if (ollamaBaseUrl) {
     logger.info(`[${new Date().toISOString()}] Ollama backend: ${ollamaBaseUrl}`);
   }
