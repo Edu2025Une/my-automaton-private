@@ -36,7 +36,7 @@ export function resolveEffectiveInferenceModel(
     const preset = env.OPENROUTER_PRESET?.trim();
     if (preset) return preset;
 
-    return "free";
+    return "openrouter/free";
   }
 
   return config.inferenceModel;

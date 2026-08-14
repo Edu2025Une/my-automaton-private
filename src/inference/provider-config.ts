@@ -90,7 +90,7 @@ export function resolveOpenRouterConfig(
   return {
     provider: "openrouter",
     apiKey,
-    model: model || preset || "free",
+    model: model || preset || "openrouter/free",
     baseUrl,
     routing,
     headers,

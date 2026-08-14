@@ -65,15 +65,15 @@ describe("standalone runtime mode", () => {
 
     expect(resolveEffectiveInferenceModel(config, {
       INFERENCE_PROVIDER: "openrouter",
-      OPENROUTER_MODEL: "openai/gpt-oss-20b:free",
-    })).toBe("openai/gpt-oss-20b:free");
+      OPENROUTER_MODEL: "openrouter/free",
+    })).toBe("openrouter/free");
     expect(resolveEffectiveInferenceModel(config, {
       INFERENCE_PROVIDER: "openrouter",
       OPENROUTER_PRESET: "@preset/free-agent",
     })).toBe("@preset/free-agent");
     expect(resolveEffectiveInferenceModel(config, {
       INFERENCE_PROVIDER: "openrouter",
-    })).toBe("free");
+    })).toBe("openrouter/free");
   });
 
   it("preserves the configured model for OpenAI, Anthropic, and Ollama", () => {

@@ -100,15 +100,15 @@ describe("OpenRouter standalone provider", () => {
     }
   });
 
-  it("uses free when no model or preset is configured", () => {
+  it("uses the OpenRouter free router when no model or preset is configured", () => {
     const config = resolveOpenRouterConfig(strictOpenRouterEnv({
       OPENROUTER_MODEL: "",
       OPENROUTER_ALLOWED_PROVIDERS: "openai",
     }));
-    expect(config.model).toBe("free");
+    expect(config.model).toBe("openrouter/free");
   });
 
-  it("InferenceRouter selects the explicit model or free without consulting strategy defaults", () => {
+  it("InferenceRouter selects the explicit model or OpenRouter free router without consulting strategy defaults", () => {
     const makeRouter = (defaultModel?: string) => new InferenceRouter(
       {} as any,
       {} as any,
@@ -116,9 +116,9 @@ describe("OpenRouter standalone provider", () => {
       { provider: "openrouter", defaultModel },
     );
 
-    expect(makeRouter().selectModel("high", "agent_turn")?.modelId).toBe("free");
-    expect(makeRouter("openai/gpt-oss-20b:free").selectModel("high", "agent_turn")?.modelId)
-      .toBe("openai/gpt-oss-20b:free");
+    expect(makeRouter().selectModel("high", "agent_turn")?.modelId).toBe("openrouter/free");
+    expect(makeRouter("openrouter/free").selectModel("high", "agent_turn")?.modelId)
+      .toBe("openrouter/free");
   });
 
   it("validates preset format", () => {
@@ -208,13 +208,13 @@ describe("OpenRouter standalone provider", () => {
     expect(result.toolCalls?.[0].function.name).toBe("read_file");
   });
 
-  it("sends free when OpenRouter has no model configured", async () => {
+  it("sends the OpenRouter free router when no model is configured", async () => {
     const config = resolveOpenRouterConfig(strictOpenRouterEnv({ OPENROUTER_MODEL: "" }));
     const client = createInferenceClient({ defaultModel: "gpt-5.2", maxTokens: 128, openRouter: config });
 
     await client.chat([{ role: "user", content: "hello" }]);
 
-    expect(lastRequestBody().model).toBe("free");
+    expect(lastRequestBody().model).toBe("openrouter/free");
     expect(lastRequestBody().model).not.toBe("gpt-5.2");
   });
 

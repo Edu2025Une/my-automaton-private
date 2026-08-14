@@ -208,9 +208,9 @@ export class InferenceRouter {
     // local routing matrix or modelStrategy, which may contain legacy defaults.
     if (this.provider === "openrouter") {
       return {
-        modelId: this.defaultModel || "free",
+        modelId: this.defaultModel || "openrouter/free",
         provider: "openrouter",
-        displayName: this.defaultModel || "free",
+        displayName: this.defaultModel || "openrouter/free",
         tierMinimum: "dead",
         costPer1kInput: 0,
         costPer1kOutput: 0,
